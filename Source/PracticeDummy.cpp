@@ -251,7 +251,6 @@ void APracticeDummy::TakeCustomDamage(int32 Damage, ABloodreadPlayerCharacter* A
     ABloodreadGameMode* GameMode = Cast<ABloodreadGameMode>(UGameplayStatics::GetGameMode(this));
     if (GameMode)
     {
-        DamageImmunityTicksRemaining = GameMode->DamageImmunityTicks;
         bCanTakeDamage = false;
     }
     

@@ -8,54 +8,24 @@
 #include "Engine/Engine.h"
 #include "Engine/AssetManager.h"
 #include "UObject/ConstructorHelpers.h"
+#include "BloodreadHealthBarWidget.h"
+#include "CharacterSelectionManager.h"
+#include "BloodreadGameMode.h"
+#include "Camera/CameraComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 
 ABloodreadGamePlayerController::ABloodreadGamePlayerController()
 {
    UE_LOG(LogTemp, Warning, TEXT("BloodreadGamePlayerController constructor - initializing for Blueprint-based Steam multiplayer"));
-   
-   // Initialize widget pointers
-   MultiplayerLobbyWidget = nullptr;
-   WB_MainMenu = nullptr;
-   WB_CreateServer = nullptr;
-   WB_ServerBrowser = nullptr;
-   
-   // Load widget classes using ConstructorHelpers (must be in constructor)
-   static ConstructorHelpers::FClassFinder<UUserWidget> MainMenuWidgetBPClass(TEXT("/Game/WB_MainMenu"));
-   if (MainMenuWidgetBPClass.Class != nullptr)
-   {
-       MainMenuWidgetClass = MainMenuWidgetBPClass.Class;
-       UE_LOG(LogTemp, Warning, TEXT("Successfully loaded WB_MainMenu Blueprint class"));
-   }
-   else
-   {
-       UE_LOG(LogTemp, Error, TEXT("Failed to load WB_MainMenu Blueprint class from /Game/WB_MainMenu"));
-       MainMenuWidgetClass = nullptr;
-   }
-   
-   static ConstructorHelpers::FClassFinder<UUserWidget> CreateServerWidgetBPClass(TEXT("/Game/WB_CreateServer"));
-   if (CreateServerWidgetBPClass.Class != nullptr)
-   {
-       CreateServerWidgetClass = CreateServerWidgetBPClass.Class;
-       UE_LOG(LogTemp, Warning, TEXT("Successfully loaded WB_CreateServer Blueprint class"));
-   }
-   else
-   {
-       UE_LOG(LogTemp, Error, TEXT("Failed to load WB_CreateServer Blueprint class from /Game/WB_CreateServer"));
-       CreateServerWidgetClass = nullptr;
-   }
-   
-   static ConstructorHelpers::FClassFinder<UUserWidget> ServerBrowserWidgetBPClass(TEXT("/Game/WB_ServerBrowser"));
-   if (ServerBrowserWidgetBPClass.Class != nullptr)
-   {
-       ServerBrowserWidgetClass = ServerBrowserWidgetBPClass.Class;
-       UE_LOG(LogTemp, Warning, TEXT("Successfully loaded WB_ServerBrowser Blueprint class"));
-   }
-   else
-   {
-       UE_LOG(LogTemp, Error, TEXT("Failed to load WB_ServerBrowser Blueprint class from /Game/WB_ServerBrowser"));
-       ServerBrowserWidgetClass = nullptr;
-   }
+
+   // Initialize Character Selection Manager
+   CharacterSelectionManager = CreateDefaultSubobject<UCharacterSelectionManager>(TEXT("CharacterSelectionManager"));
+
+   // Set default health bar widget class to prevent "HealthBarWidgetClass not set" error
+   HealthBarWidgetClass = UBloodreadHealthBarWidget::StaticClass();
+   UE_LOG(LogTemp, Warning, TEXT("BloodreadGamePlayerController: Set default HealthBarWidgetClass to UBloodreadHealthBarWidget"));
+
 }
 
 
@@ -68,10 +38,13 @@ void ABloodreadGamePlayerController::BeginPlay()
    // Check if this is the local controller
    if (IsLocalController())
    {
-       UE_LOG(LogTemp, Warning, TEXT("Local controller detected - creating Steam multiplayer UI widgets"));
+       UE_LOG(LogTemp, Warning, TEXT("Local controller detected - initializing character selection UI"));
        
-       // Create UI widgets (widget classes already loaded in constructor)
-       CreateUIWidgets();
+       // Add a small delay to ensure everything is properly initialized
+       GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
+       {
+           InitializeCharacterSelectionWidget();
+       });
    }
    else
    {
@@ -84,10 +57,16 @@ void ABloodreadGamePlayerController::OnPossess(APawn* InPawn)
 {
    Super::OnPossess(InPawn);
 
-
    UE_LOG(LogTemp, Warning, TEXT("=== PlayerController::OnPossess START ==="));
    UE_LOG(LogTemp, Warning, TEXT("PlayerController possessing pawn: %s"), InPawn ? *InPawn->GetName() : TEXT("NULL"));
   
+   // Hide character selection widget immediately when possessing any pawn
+   if (CharacterSelectionWidget && CharacterSelectionWidget->IsInViewport())
+   {
+       UE_LOG(LogTemp, Warning, TEXT("OnPossess: Hiding character selection widget immediately"));
+       HideCharacterSelectionWidget();
+   }
+   
    if (InPawn)
    {
        UE_LOG(LogTemp, Warning, TEXT("Pawn class: %s"), *InPawn->GetClass()->GetName());
@@ -98,6 +77,9 @@ void ABloodreadGamePlayerController::OnPossess(APawn* InPawn)
            UE_LOG(LogTemp, Warning, TEXT("SUCCESS: Cast to BloodreadBaseCharacter %s - Current Class: %d"),
                   *BloodreadCharacter->GetName(), (int32)BloodreadCharacter->GetCharacterClass());
            InitializeCharacterMesh(BloodreadCharacter);
+           
+           // Initialize health bar widget for the possessed character
+           InitializeHealthBarWidget(BloodreadCharacter);
        }
        else
        {
@@ -161,129 +143,340 @@ void ABloodreadGamePlayerController::InitializeCharacterMesh(ABloodreadBaseChara
    }
 }
 
-
-void ABloodreadGamePlayerController::ShowMultiplayerLobby()
+void ABloodreadGamePlayerController::InitializePlayerUI()
 {
-   UE_LOG(LogTemp, Warning, TEXT("ShowMultiplayerLobby called"));
-  
-   // If we already have a lobby widget, just show it
-   if (MultiplayerLobbyWidget && IsValid(MultiplayerLobbyWidget))
+   UE_LOG(LogTemp, Warning, TEXT("InitializePlayerUI: Setting up player UI components"));
+   
+   // Only initialize UI for local players
+   if (!IsLocalController())
    {
-       MultiplayerLobbyWidget->AddToViewport();
-       SetInputMode(FInputModeUIOnly());
-       SetShowMouseCursor(true);
-       UE_LOG(LogTemp, Warning, TEXT("Showing existing multiplayer lobby"));
+       UE_LOG(LogTemp, Warning, TEXT("InitializePlayerUI: Not a local controller, skipping UI initialization"));
        return;
    }
-  
-   UE_LOG(LogTemp, Warning, TEXT("Creating new multiplayer lobby widget..."));
-  
-   // Check if we have a Blueprint class set
-   if (MultiplayerLobbyWidgetClass)
+   
+   // Additional UI initialization can be added here
+   UE_LOG(LogTemp, Warning, TEXT("InitializePlayerUI: Player UI initialization complete"));
+}
+
+void ABloodreadGamePlayerController::InitializeCharacterSelectionWidget()
+{
+   UE_LOG(LogTemp, Warning, TEXT("=== InitializeCharacterSelectionWidget START ==="));
+   
+   // Only create UI for local players
+   if (!IsLocalController())
    {
-       UE_LOG(LogTemp, Warning, TEXT("Using Blueprint MultiplayerLobbyWidget class: %s"), *MultiplayerLobbyWidgetClass->GetName());
-       MultiplayerLobbyWidget = CreateWidget<UMultiplayerLobbyWidget>(this, MultiplayerLobbyWidgetClass);
+       UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: Not a local controller, skipping character selection widget creation"));
+       return;
+   }
+   
+   UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: This is a local controller"));
+   UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: CharacterSelectionWidgetClass is %s"), 
+          CharacterSelectionWidgetClass ? *CharacterSelectionWidgetClass->GetName() : TEXT("NULL"));
+   
+   // Check if widget already exists
+   if (CharacterSelectionWidget && CharacterSelectionWidget->IsInViewport())
+   {
+       UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: Character selection widget already exists and is in viewport"));
+       return;
+   }
+   
+   // Create character selection widget if we have a class set
+   if (CharacterSelectionWidgetClass)
+   {
+       UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: Creating character selection widget from class: %s"), 
+              *CharacterSelectionWidgetClass->GetName());
+       
+       CharacterSelectionWidget = CreateWidget<UUserWidget>(this, CharacterSelectionWidgetClass);
+       if (CharacterSelectionWidget)
+       {
+           UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: Widget created successfully"));
+           
+           // Add to viewport
+           CharacterSelectionWidget->AddToViewport();
+           UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: Widget added to viewport"));
+           
+           // Verify it's in viewport
+           if (CharacterSelectionWidget->IsInViewport())
+           {
+               UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: CONFIRMED - Widget is in viewport"));
+           }
+           else
+           {
+               UE_LOG(LogTemp, Error, TEXT("InitializeCharacterSelectionWidget: ERROR - Widget not in viewport after AddToViewport()"));
+           }
+           
+           // Set input mode to UI only with proper focus
+           FInputModeUIOnly InputMode;
+           InputMode.SetWidgetToFocus(CharacterSelectionWidget->TakeWidget());
+           InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+           SetInputMode(InputMode);
+           SetShowMouseCursor(true);
+           
+           // Make sure we can interact with UI
+           bShowMouseCursor = true;
+           bEnableClickEvents = true;
+           bEnableMouseOverEvents = true;
+           
+           UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: Input mode set to UI only, mouse cursor enabled"));
+           UE_LOG(LogTemp, Warning, TEXT("=== Character selection widget setup COMPLETE ==="));
+       }
+       else
+       {
+           UE_LOG(LogTemp, Error, TEXT("InitializeCharacterSelectionWidget: FAILED to create character selection widget"));
+       }
    }
    else
    {
-       // Fallback to C++ class if no Blueprint class is set
-       UE_LOG(LogTemp, Warning, TEXT("Using C++ MultiplayerLobbyWidget class (no Blueprint class set)"));
-       MultiplayerLobbyWidget = CreateWidget<UMultiplayerLobbyWidget>(this, UMultiplayerLobbyWidget::StaticClass());
+       UE_LOG(LogTemp, Error, TEXT("InitializeCharacterSelectionWidget: CharacterSelectionWidgetClass is NULL - you need to set this in Blueprint or C++"));
+       UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: Attempting to call GameMode's ShowCharacterSelectionWidget as fallback"));
+       
+       // Fallback: try to call the GameMode's character selection widget
+       if (ABloodreadGameMode* GameMode = Cast<ABloodreadGameMode>(GetWorld()->GetAuthGameMode()))
+       {
+           UE_LOG(LogTemp, Warning, TEXT("InitializeCharacterSelectionWidget: Found BloodreadGameMode, calling ShowCharacterSelectionWidget"));
+           GameMode->ShowCharacterSelectionWidget();
+       }
+       else
+       {
+           UE_LOG(LogTemp, Error, TEXT("InitializeCharacterSelectionWidget: No BloodreadGameMode found, cannot show character selection"));
+       }
    }
-  
-   if (MultiplayerLobbyWidget)
+   
+   UE_LOG(LogTemp, Warning, TEXT("=== InitializeCharacterSelectionWidget END ==="));
+}
+
+void ABloodreadGamePlayerController::ForceShowCharacterSelection()
+{
+   UE_LOG(LogTemp, Warning, TEXT("ForceShowCharacterSelection called - forcing character selection display"));
+   
+   // Clear any existing widget first
+   if (CharacterSelectionWidget && CharacterSelectionWidget->IsInViewport())
    {
-       UE_LOG(LogTemp, Warning, TEXT("Widget created successfully, adding to viewport"));
-       MultiplayerLobbyWidget->AddToViewport();
-       SetInputMode(FInputModeUIOnly());
-       SetShowMouseCursor(true);
-       UE_LOG(LogTemp, Warning, TEXT("Multiplayer lobby created and shown - Input mode set to UI"));
+       CharacterSelectionWidget->RemoveFromParent();
+       CharacterSelectionWidget = nullptr;
+   }
+   
+   // Force initialize the character selection widget
+   InitializeCharacterSelectionWidget();
+}
+
+void ABloodreadGamePlayerController::HideCharacterSelectionWidget()
+{
+   UE_LOG(LogTemp, Warning, TEXT("HideCharacterSelectionWidget called"));
+   
+   if (CharacterSelectionWidget)
+   {
+       if (CharacterSelectionWidget->IsInViewport())
+       {
+           UE_LOG(LogTemp, Warning, TEXT("HideCharacterSelectionWidget: Removing widget from viewport"));
+           CharacterSelectionWidget->RemoveFromParent();
+       }
+       
+       // Clear the reference
+       CharacterSelectionWidget = nullptr;
+       UE_LOG(LogTemp, Warning, TEXT("HideCharacterSelectionWidget: Widget reference cleared"));
    }
    else
    {
-       UE_LOG(LogTemp, Error, TEXT("Failed to create multiplayer lobby widget"));
+       UE_LOG(LogTemp, Warning, TEXT("HideCharacterSelectionWidget: No character selection widget to hide"));
+   }
+   
+   // Always switch to game input mode when hiding character selection
+   SetInputMode(FInputModeGameOnly());
+   SetShowMouseCursor(false);
+   bShowMouseCursor = false;
+   UE_LOG(LogTemp, Warning, TEXT("HideCharacterSelectionWidget: Switched to game input mode, cursor hidden"));
+}
+
+void ABloodreadGamePlayerController::OnCharacterSelected()
+{
+   UE_LOG(LogTemp, Warning, TEXT("OnCharacterSelected called - character selection made"));
+   
+   // Immediately hide the character selection widget
+   HideCharacterSelectionWidget();
+   
+   // Make sure we're in game input mode
+   SetInputMode(FInputModeGameOnly());
+   SetShowMouseCursor(false);
+   bShowMouseCursor = false;
+   
+   UE_LOG(LogTemp, Warning, TEXT("OnCharacterSelected: Character selection hidden, ready for character spawn"));
+}
+
+void ABloodreadGamePlayerController::AttachCameraToHeadBone(ABloodreadBaseCharacter* PlayerCharacter, USkeletalMeshComponent* MeshComponent)
+{
+   if (!PlayerCharacter || !MeshComponent)
+   {
+       UE_LOG(LogTemp, Error, TEXT("AttachCameraToHeadBone: PlayerCharacter or MeshComponent is null"));
+       return;
+   }
+   
+   UE_LOG(LogTemp, Warning, TEXT("AttachCameraToHeadBone: Attempting to attach camera to head bone"));
+   
+   // Try common head bone names
+   TArray<FString> HeadBoneNames = {
+       TEXT("head"),
+       TEXT("Head"),
+       TEXT("HEAD"),
+       TEXT("head_01"),
+       TEXT("Head_01"),
+       TEXT("b_head"),
+       TEXT("B_Head"),
+       TEXT("Bip01_Head"),
+       TEXT("spine_03"),
+       TEXT("Spine_03")
+   };
+   
+   FName HeadBoneName = NAME_None;
+   
+   // Find the head bone
+   for (const FString& BoneName : HeadBoneNames)
+   {
+       FName TestBoneName(*BoneName);
+       if (MeshComponent->GetBoneIndex(TestBoneName) != INDEX_NONE)
+       {
+           HeadBoneName = TestBoneName;
+           UE_LOG(LogTemp, Warning, TEXT("AttachCameraToHeadBone: Found head bone: %s"), *BoneName);
+           break;
+       }
+   }
+   
+   if (HeadBoneName == NAME_None)
+   {
+       UE_LOG(LogTemp, Warning, TEXT("AttachCameraToHeadBone: No head bone found, listing all bones for reference:"));
+       
+       // List all available bones for debugging
+       const FReferenceSkeleton& RefSkeleton = MeshComponent->GetSkeletalMeshAsset()->GetRefSkeleton();
+       for (int32 BoneIndex = 0; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
+       {
+           FString BoneName = RefSkeleton.GetBoneName(BoneIndex).ToString();
+           UE_LOG(LogTemp, Warning, TEXT("Available bone %d: %s"), BoneIndex, *BoneName);
+           
+           // If we find any bone with "head" in the name, use it
+           if (BoneName.Contains(TEXT("head"), ESearchCase::IgnoreCase) || 
+               BoneName.Contains(TEXT("skull"), ESearchCase::IgnoreCase))
+           {
+               HeadBoneName = RefSkeleton.GetBoneName(BoneIndex);
+               UE_LOG(LogTemp, Warning, TEXT("AttachCameraToHeadBone: Using bone with 'head' in name: %s"), *BoneName);
+               break;
+           }
+       }
+   }
+   
+   // Try to find and attach the camera
+   if (UCameraComponent* CameraComponent = PlayerCharacter->FindComponentByClass<UCameraComponent>())
+   {
+       if (HeadBoneName != NAME_None)
+       {
+           UE_LOG(LogTemp, Warning, TEXT("AttachCameraToHeadBone: Attaching camera to bone: %s"), *HeadBoneName.ToString());
+           
+           // Detach from current parent first
+           CameraComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+           
+           // Attach to the head bone
+           CameraComponent->AttachToComponent(
+               MeshComponent,
+               FAttachmentTransformRules::SnapToTargetIncludingScale,
+               HeadBoneName
+           );
+           
+           // Set relative transform to position camera in front of head
+           // X = Forward, Y = Right, Z = Up in Unreal coordinates
+           CameraComponent->SetRelativeLocation(FVector(0.0f, 10.0f, 0.0f)); // Forward 15, center Y, slightly down 2
+           CameraComponent->SetRelativeRotation(FRotator::ZeroRotator);
+           
+           UE_LOG(LogTemp, Warning, TEXT("AttachCameraToHeadBone: Camera attached to head bone at forward position (15, 0, -2)"));
+       }
+       else
+       {
+           UE_LOG(LogTemp, Error, TEXT("AttachCameraToHeadBone: Could not find suitable head bone"));
+       }
+   }
+   else
+   {
+       UE_LOG(LogTemp, Error, TEXT("AttachCameraToHeadBone: No camera component found on character"));
    }
 }
 
-
-void ABloodreadGamePlayerController::HideMultiplayerLobby()
+void ABloodreadGamePlayerController::InitializeHealthBarWidget(ABloodreadBaseCharacter* PlayerCharacter)
 {
-   if (MultiplayerLobbyWidget && IsValid(MultiplayerLobbyWidget))
+   if (!PlayerCharacter)
    {
-       MultiplayerLobbyWidget->RemoveFromParent();
+       UE_LOG(LogTemp, Error, TEXT("InitializeHealthBarWidget: PlayerCharacter is null"));
+       return;
+   }
+   
+   // Only create UI for local players
+   if (!IsLocalController())
+   {
+       UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Not a local controller, skipping health bar creation"));
+       return;
+   }
+   
+   UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Creating health bar for character: %s"), *PlayerCharacter->GetName());
+   
+   // Attach camera to head bone now that character is selected and spawned
+   USkeletalMeshComponent* MeshComp = PlayerCharacter->FindComponentByClass<USkeletalMeshComponent>();
+   if (!MeshComp)
+   {
+       MeshComp = PlayerCharacter->GetMesh(); // Fallback to default mesh
+   }
+   if (MeshComp)
+   {
+       AttachCameraToHeadBone(PlayerCharacter, MeshComp);
+   }
+   
+   // Hide character selection widget when spawning character
+   if (CharacterSelectionWidget)
+   {
+       if (CharacterSelectionWidget->IsInViewport())
+       {
+           UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Removing character selection widget from viewport"));
+           CharacterSelectionWidget->RemoveFromParent();
+       }
+       else
+       {
+           UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Character selection widget exists but not in viewport"));
+       }
+       
+       // Clear the reference
+       CharacterSelectionWidget = nullptr;
+       UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Character selection widget reference cleared"));
+   }
+   else
+   {
+       UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: No character selection widget to remove"));
+   }
+   
+   // Create health bar widget if we have a class set
+   if (HealthBarWidgetClass)
+   {
+       HealthBarWidget = CreateWidget<UBloodreadHealthBarWidget>(this, HealthBarWidgetClass);
+       if (HealthBarWidget)
+       {
+           // Initialize the health bar with the character
+           HealthBarWidget->InitializeHealthBar(PlayerCharacter);
+           
+           // Add to viewport
+           HealthBarWidget->AddToViewport();
+           
+           // Switch to game input mode
+           SetInputMode(FInputModeGameOnly());
+           SetShowMouseCursor(false);
+           
+           UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Health bar widget created, input mode switched to game"));
+       }
+       else
+       {
+           UE_LOG(LogTemp, Error, TEXT("InitializeHealthBarWidget: Failed to create health bar widget"));
+       }
+   }
+   else
+   {
+       UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: HealthBarWidgetClass not set, but still switching input mode"));
+       
+       // Even if no health bar, switch input mode when character spawns
        SetInputMode(FInputModeGameOnly());
        SetShowMouseCursor(false);
-       UE_LOG(LogTemp, Warning, TEXT("Multiplayer lobby hidden"));
    }
 }
-
-void ABloodreadGamePlayerController::CreateUIWidgets()
-{
-   UE_LOG(LogTemp, Warning, TEXT("CreateUIWidgets: Creating Steam multiplayer UI widgets"));
-   
-   // Create WB_MainMenu widget and add to viewport
-   if (MainMenuWidgetClass)
-   {
-       WB_MainMenu = CreateWidget<UUserWidget>(this, MainMenuWidgetClass);
-       if (WB_MainMenu)
-       {
-           WB_MainMenu->AddToViewport();
-           UE_LOG(LogTemp, Warning, TEXT("WB_MainMenu created and added to viewport"));
-           
-           // Set input mode for UI interaction
-           SetInputMode(FInputModeUIOnly());
-           SetShowMouseCursor(true);
-       }
-       else
-       {
-           UE_LOG(LogTemp, Error, TEXT("Failed to create WB_MainMenu widget"));
-       }
-   }
-   else
-   {
-       UE_LOG(LogTemp, Error, TEXT("MainMenuWidgetClass is null - cannot create WB_MainMenu"));
-   }
-   
-   // Create WB_CreateServer widget (but don't add to viewport yet)
-   if (CreateServerWidgetClass)
-   {
-       WB_CreateServer = CreateWidget<UUserWidget>(this, CreateServerWidgetClass);
-       if (WB_CreateServer)
-       {
-           UE_LOG(LogTemp, Warning, TEXT("WB_CreateServer widget created successfully"));
-       }
-       else
-       {
-           UE_LOG(LogTemp, Error, TEXT("Failed to create WB_CreateServer widget"));
-       }
-   }
-   else
-   {
-       UE_LOG(LogTemp, Error, TEXT("CreateServerWidgetClass is null - cannot create WB_CreateServer"));
-   }
-   
-   // Create WB_ServerBrowser widget (but don't add to viewport yet)
-   if (ServerBrowserWidgetClass)
-   {
-       WB_ServerBrowser = CreateWidget<UUserWidget>(this, ServerBrowserWidgetClass);
-       if (WB_ServerBrowser)
-       {
-           UE_LOG(LogTemp, Warning, TEXT("WB_ServerBrowser widget created successfully"));
-           // Set as the current server browser (user requirement)
-           UE_LOG(LogTemp, Warning, TEXT("WB_ServerBrowser set as current server browser widget"));
-       }
-       else
-       {
-           UE_LOG(LogTemp, Error, TEXT("Failed to create WB_ServerBrowser widget"));
-       }
-   }
-   else
-   {
-       UE_LOG(LogTemp, Error, TEXT("ServerBrowserWidgetClass is null - cannot create WB_ServerBrowser"));
-   }
-   
-   UE_LOG(LogTemp, Warning, TEXT("UI widget creation complete - Main Menu displayed, Create Server and Server Browser widgets ready"));
-}
-
-
-

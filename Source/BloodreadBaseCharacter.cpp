@@ -89,8 +89,19 @@ ABloodreadBaseCharacter::ABloodreadBaseCharacter()
     HealthBarWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen); // Screen space - always face camera
     HealthBarWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision); // No collision like dummy
     
-    // Note: Widget class should be set in Blueprint - just like PracticeDummy
-    // The Blueprint will assign the proper overhead health bar widget class
+    // Set default widget class to fix "Widget Class Set: NONE" error
+    static ConstructorHelpers::FClassFinder<UUserWidget> HealthBarWidgetBPClass(TEXT("/Game/UI/BloodreadHealthBarWidget"));
+    if (HealthBarWidgetBPClass.Class != nullptr)
+    {
+        HealthBarWidgetComponent->SetWidgetClass(HealthBarWidgetBPClass.Class);
+        UE_LOG(LogTemp, Warning, TEXT("BloodreadBaseCharacter: Set default BloodreadHealthBarWidget class"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BloodreadBaseCharacter: Could not find Blueprint BloodreadHealthBarWidget, using C++ class"));
+        // Fallback to C++ class
+        HealthBarWidgetComponent->SetWidgetClass(UBloodreadHealthBarWidget::StaticClass());
+    }
     
     // Distance-based visibility settings
     MaxHealthBarVisibilityDistance = 2000.0f; // Hide health bars beyond 20 meters
@@ -1620,6 +1631,11 @@ void ABloodreadBaseCharacter::TestHeal()
 FString ABloodreadBaseCharacter::GetHealthText() const
 {
     return FString::Printf(TEXT("%d/%d"), CurrentHealth, CurrentStats.MaxHealth);
+}
+
+FString ABloodreadBaseCharacter::GetManaText() const
+{
+    return FString::Printf(TEXT("%d/%d"), CurrentMana, CurrentStats.Mana);
 }
 
 FString ABloodreadBaseCharacter::GetAbility1Name() const

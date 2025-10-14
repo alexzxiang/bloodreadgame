@@ -31,6 +31,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Health Bar")
     void SetUpdateFrequency(float NewUpdateFrequency);
 
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Health Bar")
+    FString GetHealthText() const;
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Health Bar")
+    FString GetManaText() const;
+
 protected:
     UFUNCTION()
     void BindHealthEvents(ABloodreadBaseCharacter* Character);
@@ -42,17 +48,17 @@ protected:
     void OnCharacterHealthChanged(int32 OldHealth, int32 NewHealth);
 
 protected:
-    // Widget components
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    // Widget components (optional bindings)
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UProgressBar* HealthBar;
 
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UProgressBar* HealthProgressBar;
 
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UTextBlock* HealthText;
 
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     UTextBlock* CharacterClassText;
 
     // Character reference

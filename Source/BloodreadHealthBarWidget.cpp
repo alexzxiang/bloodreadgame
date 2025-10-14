@@ -26,20 +26,25 @@ void UBloodreadHealthBarWidget::NativeConstruct()
     
     UE_LOG(LogTemp, Warning, TEXT("BloodreadHealthBarWidget: NativeConstruct called"));
     
-    // Validate widget components
+    // Validate widget components (all are now optional)
+    if (!HealthBar)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HealthBar not found - widget binding is optional"));
+    }
+    
     if (!HealthProgressBar)
     {
-        UE_LOG(LogTemp, Error, TEXT("HealthProgressBar not found! Make sure widget has ProgressBar named 'HealthProgressBar'"));
+        UE_LOG(LogTemp, Warning, TEXT("HealthProgressBar not found - widget binding is optional"));
     }
     
     if (!HealthText)
     {
-        UE_LOG(LogTemp, Error, TEXT("HealthText not found! Make sure widget has TextBlock named 'HealthText'"));
+        UE_LOG(LogTemp, Warning, TEXT("HealthText not found - widget binding is optional"));
     }
     
     if (!CharacterClassText)
     {
-        UE_LOG(LogTemp, Error, TEXT("CharacterClassText not found! Make sure widget has TextBlock named 'CharacterClassText'"));
+        UE_LOG(LogTemp, Warning, TEXT("CharacterClassText not found - widget binding is optional"));
     }
     
     // Try to automatically find the player character
@@ -103,6 +108,11 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
     if (!PlayerCharacterRef)
     {
         // No character reference - show default/empty state
+        if (HealthBar)
+        {
+            HealthBar->SetPercent(0.0f);
+        }
+        
         if (HealthProgressBar)
         {
             HealthProgressBar->SetPercent(0.0f);
@@ -121,10 +131,33 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
         return;
     }
     
-    // Update health progress bar
+    float HealthPercent = PlayerCharacterRef->GetHealthPercent();
+    
+    // Update health progress bars (we have two for flexibility)
+    if (HealthBar)
+    {
+        HealthBar->SetPercent(HealthPercent);
+        
+        // Update color based on health percentage
+        FLinearColor BarColor;
+        if (HealthPercent > 0.6f)
+        {
+            BarColor = HealthyColor;
+        }
+        else if (HealthPercent > 0.3f)
+        {
+            BarColor = DamagedColor;
+        }
+        else
+        {
+            BarColor = CriticalColor;
+        }
+        
+        HealthBar->SetFillColorAndOpacity(BarColor);
+    }
+    
     if (HealthProgressBar)
     {
-        float HealthPercent = PlayerCharacterRef->GetHealthPercent();
         HealthProgressBar->SetPercent(HealthPercent);
         
         // Update color based on health percentage
@@ -226,4 +259,32 @@ void UBloodreadHealthBarWidget::OnCharacterHealthChanged(int32 OldHealth, int32 
     
     // Update display immediately when health changes
     UpdateHealthDisplay();
+}
+
+FString UBloodreadHealthBarWidget::GetHealthText() const
+{
+    if (TargetCharacter)
+    {
+        return TargetCharacter->GetHealthText();
+    }
+    else if (PlayerCharacterRef)
+    {
+        return PlayerCharacterRef->GetHealthText();
+    }
+    
+    return FString(TEXT("0/0"));
+}
+
+FString UBloodreadHealthBarWidget::GetManaText() const
+{
+    if (TargetCharacter)
+    {
+        return TargetCharacter->GetManaText();
+    }
+    else if (PlayerCharacterRef)
+    {
+        return PlayerCharacterRef->GetManaText();
+    }
+    
+    return FString(TEXT("0/0"));
 }

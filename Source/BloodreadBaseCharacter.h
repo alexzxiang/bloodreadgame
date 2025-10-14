@@ -641,9 +641,9 @@ public:
     
     // Additional methods
     void ReactivateAnimationBlueprints();
-    
+
     UFUNCTION(BlueprintCallable, Category = "UI")
-    FString GetManaText() { return FString::Printf(TEXT("%d/%d"), CurrentMana, CurrentStats.Mana); }
+    FString GetManaText() const;
 
 private:
     void UpdateAbilityCooldowns(float DeltaTime);

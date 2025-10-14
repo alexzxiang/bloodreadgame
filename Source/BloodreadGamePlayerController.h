@@ -6,8 +6,11 @@
 #include "GameFramework/PlayerController.h"
 #include "BloodreadBaseCharacter.h"
 #include "Blueprint/UserWidget.h"
-#include "MultiplayerLobbyWidget.h"
 #include "BloodreadGamePlayerController.generated.h"
+
+// Forward declarations
+class UBloodreadHealthBarWidget;
+class UCharacterSelectionManager;
 
 /**
  *  Simple Player Controller for traditional input system
@@ -23,13 +26,13 @@ public:
 	/** Constructor */
 	ABloodreadGamePlayerController();
 
-	/** Show multiplayer lobby on game start */
-	UFUNCTION(BlueprintCallable, Category = "Multiplayer")
-	void ShowMultiplayerLobby();
+	/** Initialize health bar widget */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void InitializeHealthBarWidget(ABloodreadBaseCharacter* PlayerCharacter);
 
-	/** Hide multiplayer lobby */
-	UFUNCTION(BlueprintCallable, Category = "Multiplayer")
-	void HideMultiplayerLobby();
+	/** Hide character selection widget (can be called from Blueprint) */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void HideCharacterSelectionWidget();
 
 protected:
 
@@ -43,38 +46,47 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "Character")
 	void InitializeCharacterMesh(ABloodreadBaseCharacter* InCharacter);
 
-	/** Create and setup all UI widgets */
-	void CreateUIWidgets();
+	/** Attach camera to character head bone */
+	UFUNCTION(BlueprintCallable, Category = "Character")
+	void AttachCameraToHeadBone(ABloodreadBaseCharacter* PlayerCharacter, USkeletalMeshComponent* MeshComponent);
+
+	/** Initialize player UI components */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void InitializePlayerUI();
+
+	/** Initialize character selection widget */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void InitializeCharacterSelectionWidget();
+
+	/** Force show character selection widget (can be called from Blueprint) */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ForceShowCharacterSelection();
+
+	/** Force hide character selection and switch to game mode (called when character is selected) */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void OnCharacterSelected();
+
+protected:
+	// Character selection widget reference
+	UPROPERTY(BlueprintReadWrite, Category = "UI")
+	UUserWidget* CharacterSelectionWidget;
+
+	// Character selection widget class
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<UUserWidget> CharacterSelectionWidgetClass;
+
+	// Health bar widget reference
+	UPROPERTY(BlueprintReadWrite, Category = "UI")
+	UBloodreadHealthBarWidget* HealthBarWidget;
+
+	// Health bar widget class
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<UBloodreadHealthBarWidget> HealthBarWidgetClass;
+
+	// Character Selection Manager
+	UPROPERTY(BlueprintReadWrite, Category = "Character Selection")
+	UCharacterSelectionManager* CharacterSelectionManager;
 
 private:
-	/** Multiplayer lobby widget reference */
-	UPROPERTY()
-	UMultiplayerLobbyWidget* MultiplayerLobbyWidget;
-
-	/** Main menu widget reference */
-	UPROPERTY()
-	TObjectPtr<UUserWidget> WB_MainMenu;
-
-	/** Create server widget reference */
-	UPROPERTY()
-	TObjectPtr<UUserWidget> WB_CreateServer;
-
-	/** Server browser widget reference */
-	UPROPERTY()
-	TObjectPtr<UUserWidget> WB_ServerBrowser;
-
-	/** Widget classes loaded from Blueprint assets */
-	UPROPERTY()
-	TSubclassOf<UUserWidget> MainMenuWidgetClass;
-
-	UPROPERTY()
-	TSubclassOf<UUserWidget> CreateServerWidgetClass;
-
-	UPROPERTY()
-	TSubclassOf<UUserWidget> ServerBrowserWidgetClass;
-
-	/** Widget class to use for multiplayer lobby (set in Blueprint) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI", meta = (AllowPrivateAccess = "true"))
-	TSubclassOf<UMultiplayerLobbyWidget> MultiplayerLobbyWidgetClass;
 
 };

@@ -287,7 +287,6 @@ bool ABloodreadPlayerCharacter::TakeCustomDamage(int32 Damage, ABloodreadPlayerC
     ABloodreadGameMode* GameMode = Cast<ABloodreadGameMode>(UGameplayStatics::GetGameMode(this));
     if (GameMode)
     {
-        PlayerStats.DamageImmunityTicksRemaining = GameMode->DamageImmunityTicks;
         PlayerStats.bCanTakeDamage = false;
     }
     
@@ -313,7 +312,6 @@ bool ABloodreadPlayerCharacter::TakeCustomDamage(int32 Damage, ABloodreadPlayerC
         if (GameMode)
         {
             int32 WinnerId = Attacker ? 1 : 0; // You'll need to map this to actual player IDs
-            GameMode->EndMatch(WinnerId);
         }
         
         UE_LOG(LogTemp, Warning, TEXT("Player has died from damage!"));
