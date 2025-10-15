@@ -24,27 +24,95 @@ void UBloodreadHealthBarWidget::NativeConstruct()
 {
     Super::NativeConstruct();
     
-    UE_LOG(LogTemp, Warning, TEXT("BloodreadHealthBarWidget: NativeConstruct called"));
+    UE_LOG(LogTemp, Warning, TEXT("=== BloodreadHealthBarWidget::NativeConstruct START ==="));
     
-    // Validate widget components (all are now optional)
-    if (!HealthBar)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("HealthBar not found - widget binding is optional"));
-    }
+    // Count bound widgets
+    int32 BoundWidgetCount = 0;
+    int32 TotalRequiredWidgets = 7; // HealthProgressBar, HealthText, CharacterClassText, ManaProgressBar, ManaText, Ability1ProgressBar, Ability2ProgressBar
     
+    // Validate widget components (all are now required)
     if (!HealthProgressBar)
     {
-        UE_LOG(LogTemp, Warning, TEXT("HealthProgressBar not found - widget binding is optional"));
+        UE_LOG(LogTemp, Error, TEXT("REQUIRED: HealthProgressBar not found - add a Progress Bar named 'HealthProgressBar' to your Blueprint widget"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HealthProgressBar FOUND and bound successfully"));
+        BoundWidgetCount++;
     }
     
     if (!HealthText)
     {
-        UE_LOG(LogTemp, Warning, TEXT("HealthText not found - widget binding is optional"));
+        UE_LOG(LogTemp, Error, TEXT("REQUIRED: HealthText not found - add a Text Block named 'HealthText' to your Blueprint widget"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("HealthText FOUND and bound successfully"));
+        BoundWidgetCount++;
     }
     
     if (!CharacterClassText)
     {
-        UE_LOG(LogTemp, Warning, TEXT("CharacterClassText not found - widget binding is optional"));
+        UE_LOG(LogTemp, Error, TEXT("REQUIRED: CharacterClassText not found - add a Text Block named 'CharacterClassText' to your Blueprint widget"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("CharacterClassText FOUND and bound successfully"));
+        BoundWidgetCount++;
+    }
+    
+    if (!ManaProgressBar)
+    {
+        UE_LOG(LogTemp, Error, TEXT("REQUIRED: ManaProgressBar not found - add a Progress Bar named 'ManaProgressBar' to your Blueprint widget"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ManaProgressBar FOUND and bound successfully"));
+        BoundWidgetCount++;
+    }
+    
+    if (!ManaText)
+    {
+        UE_LOG(LogTemp, Error, TEXT("REQUIRED: ManaText not found - add a Text Block named 'ManaText' to your Blueprint widget"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ManaText FOUND and bound successfully"));
+        BoundWidgetCount++;
+    }
+    
+    if (!Ability1ProgressBar)
+    {
+        UE_LOG(LogTemp, Error, TEXT("REQUIRED: Ability1ProgressBar not found - add a Progress Bar named 'Ability1ProgressBar' to your Blueprint widget"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Ability1ProgressBar FOUND and bound successfully"));
+        BoundWidgetCount++;
+    }
+    
+    if (!Ability2ProgressBar)
+    {
+        UE_LOG(LogTemp, Error, TEXT("REQUIRED: Ability2ProgressBar not found - add a Progress Bar named 'Ability2ProgressBar' to your Blueprint widget"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Ability2ProgressBar FOUND and bound successfully"));
+        BoundWidgetCount++;
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("Total bound widgets: %d / %d"), BoundWidgetCount, TotalRequiredWidgets);
+    
+    if (BoundWidgetCount < TotalRequiredWidgets)
+    {
+        UE_LOG(LogTemp, Error, TEXT("MISSING REQUIRED WIDGETS! Your Blueprint widget must have UI elements with these exact names:"));
+        UE_LOG(LogTemp, Error, TEXT("- Progress Bar named 'HealthProgressBar'"));
+        UE_LOG(LogTemp, Error, TEXT("- Progress Bar named 'ManaProgressBar'"));
+        UE_LOG(LogTemp, Error, TEXT("- Progress Bar named 'Ability1ProgressBar'"));
+        UE_LOG(LogTemp, Error, TEXT("- Progress Bar named 'Ability2ProgressBar'"));
+        UE_LOG(LogTemp, Error, TEXT("- Text Block named 'HealthText'"));
+        UE_LOG(LogTemp, Error, TEXT("- Text Block named 'ManaText'"));
+        UE_LOG(LogTemp, Error, TEXT("- Text Block named 'CharacterClassText'"));
     }
     
     // Try to automatically find the player character
@@ -108,11 +176,6 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
     if (!PlayerCharacterRef)
     {
         // No character reference - show default/empty state
-        if (HealthBar)
-        {
-            HealthBar->SetPercent(0.0f);
-        }
-        
         if (HealthProgressBar)
         {
             HealthProgressBar->SetPercent(0.0f);
@@ -128,34 +191,32 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
             CharacterClassText->SetText(FText::FromString("No Character"));
         }
         
+        if (ManaProgressBar)
+        {
+            ManaProgressBar->SetPercent(0.0f);
+        }
+        
+        if (ManaText)
+        {
+            ManaText->SetText(FText::FromString("0/0"));
+        }
+        
+        if (Ability1ProgressBar)
+        {
+            Ability1ProgressBar->SetPercent(1.0f); // Abilities start ready (full bar)
+        }
+        
+        if (Ability2ProgressBar)
+        {
+            Ability2ProgressBar->SetPercent(1.0f); // Abilities start ready (full bar)
+        }
+        
         return;
     }
     
     float HealthPercent = PlayerCharacterRef->GetHealthPercent();
     
-    // Update health progress bars (we have two for flexibility)
-    if (HealthBar)
-    {
-        HealthBar->SetPercent(HealthPercent);
-        
-        // Update color based on health percentage
-        FLinearColor BarColor;
-        if (HealthPercent > 0.6f)
-        {
-            BarColor = HealthyColor;
-        }
-        else if (HealthPercent > 0.3f)
-        {
-            BarColor = DamagedColor;
-        }
-        else
-        {
-            BarColor = CriticalColor;
-        }
-        
-        HealthBar->SetFillColorAndOpacity(BarColor);
-    }
-    
+    // Update health progress bar
     if (HealthProgressBar)
     {
         HealthProgressBar->SetPercent(HealthPercent);
@@ -202,11 +263,64 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
             case ECharacterClass::Rogue:
                 ClassName = "Rogue";
                 break;
+            case ECharacterClass::Healer:
+                ClassName = "Healer";
+                break;
+            case ECharacterClass::Dragon:
+                ClassName = "Dragon";
+                break;
             default:
                 ClassName = "Unknown";
                 break;
         }
         CharacterClassText->SetText(FText::FromString(ClassName));
+    }
+    
+    // Update mana progress bar
+    if (ManaProgressBar)
+    {
+        float ManaPercent = PlayerCharacterRef->GetManaPercentage();
+        ManaProgressBar->SetPercent(ManaPercent);
+        
+        // Set mana bar color (you can customize these colors)
+        FLinearColor ManaColor = FLinearColor::Blue;
+        if (ManaPercent < 0.3f)
+        {
+            ManaColor = FLinearColor(0.4f, 0.4f, 1.0f, 1.0f); // Darker blue when low
+        }
+        ManaProgressBar->SetFillColorAndOpacity(ManaColor);
+    }
+    
+    // Update mana text
+    if (ManaText)
+    {
+        int32 CurrentMana = PlayerCharacterRef->GetCurrentMana();
+        int32 MaxMana = PlayerCharacterRef->GetMaxMana();
+        FString ManaString = FString::Printf(TEXT("%d/%d"), CurrentMana, MaxMana);
+        ManaText->SetText(FText::FromString(ManaString));
+    }
+    
+    // Update ability progress bars (1.0 = ready, 0.0 = on cooldown)
+    if (Ability1ProgressBar)
+    {
+        // For now, assume abilities are always ready (you can add cooldown logic later)
+        float Ability1Progress = 1.0f; // Replace with actual cooldown progress
+        Ability1ProgressBar->SetPercent(Ability1Progress);
+        
+        // Set ability bar color (green when ready, red when on cooldown)
+        FLinearColor AbilityColor = Ability1Progress >= 1.0f ? FLinearColor::Green : FLinearColor::Red;
+        Ability1ProgressBar->SetFillColorAndOpacity(AbilityColor);
+    }
+    
+    if (Ability2ProgressBar)
+    {
+        // For now, assume abilities are always ready (you can add cooldown logic later)
+        float Ability2Progress = 1.0f; // Replace with actual cooldown progress
+        Ability2ProgressBar->SetPercent(Ability2Progress);
+        
+        // Set ability bar color (green when ready, red when on cooldown)
+        FLinearColor AbilityColor = Ability2Progress >= 1.0f ? FLinearColor::Green : FLinearColor::Red;
+        Ability2ProgressBar->SetFillColorAndOpacity(AbilityColor);
     }
 }
 

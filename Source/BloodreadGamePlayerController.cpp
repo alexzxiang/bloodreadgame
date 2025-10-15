@@ -25,6 +25,10 @@ ABloodreadGamePlayerController::ABloodreadGamePlayerController()
    // Set default health bar widget class to prevent "HealthBarWidgetClass not set" error
    HealthBarWidgetClass = UBloodreadHealthBarWidget::StaticClass();
    UE_LOG(LogTemp, Warning, TEXT("BloodreadGamePlayerController: Set default HealthBarWidgetClass to UBloodreadHealthBarWidget"));
+   
+   // IMPORTANT: You should set this to your Blueprint widget class in the editor!
+   // The line above sets it to the C++ class, but you want to use your Blueprint widget
+   // Go to your PlayerController Blueprint and set the "Health Bar Widget Class" to your WBP_HealthBar
 
 }
 
@@ -451,20 +455,44 @@ void ABloodreadGamePlayerController::InitializeHealthBarWidget(ABloodreadBaseCha
    // Create health bar widget if we have a class set
    if (HealthBarWidgetClass)
    {
+       UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: HealthBarWidgetClass is set to: %s"), *HealthBarWidgetClass->GetName());
+       
        HealthBarWidget = CreateWidget<UBloodreadHealthBarWidget>(this, HealthBarWidgetClass);
        if (HealthBarWidget)
        {
+           UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Widget created successfully"));
+           
            // Initialize the health bar with the character
            HealthBarWidget->InitializeHealthBar(PlayerCharacter);
+           UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Widget initialized with character"));
            
-           // Add to viewport
-           HealthBarWidget->AddToViewport();
+           // Add to viewport with high Z-order and detailed logging
+           HealthBarWidget->AddToViewport(1000);
+           UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Widget added to viewport"));
+           
+           // Verify viewport addition
+           if (HealthBarWidget->IsInViewport())
+           {
+               UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: CONFIRMED - Widget is in viewport"));
+               
+               // Force visibility
+               HealthBarWidget->SetVisibility(ESlateVisibility::Visible);
+               HealthBarWidget->SetRenderOpacity(1.0f);
+               UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Widget visibility and opacity set"));
+               
+               // Log widget tree info
+               UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Widget class: %s"), *HealthBarWidget->GetClass()->GetName());
+           }
+           else
+           {
+               UE_LOG(LogTemp, Error, TEXT("InitializeHealthBarWidget: ERROR - Widget not in viewport after AddToViewport()"));
+           }
            
            // Switch to game input mode
            SetInputMode(FInputModeGameOnly());
            SetShowMouseCursor(false);
            
-           UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Health bar widget created, input mode switched to game"));
+           UE_LOG(LogTemp, Warning, TEXT("InitializeHealthBarWidget: Health bar widget setup complete, input mode switched to game"));
        }
        else
        {

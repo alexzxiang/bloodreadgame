@@ -36,7 +36,7 @@ public:
     void HidePlayerHUD();
 
     UFUNCTION(BlueprintCallable, Category="Character Selection")
-    void HandleCharacterSelection(int32 CharacterClassIndex);
+    void HandleCharacterSelection(int32 CharacterClassIndex, APlayerController* PlayerController = nullptr);
     
     UFUNCTION(BlueprintCallable, Category="Character Selection") 
     void OnCharacterSelected(int32 CharacterClassIndex);

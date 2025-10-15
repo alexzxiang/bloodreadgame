@@ -124,18 +124,25 @@ void ABloodreadGameMode::HideCharacterSelectionWidget()
     }
 }
 
-void ABloodreadGameMode::HandleCharacterSelection(int32 CharacterClassIndex)
+void ABloodreadGameMode::HandleCharacterSelection(int32 CharacterClassIndex, APlayerController* PlayerController)
 {
     UE_LOG(LogTemp, Warning, TEXT("=== CHARACTER SELECTION STARTED ==="));
     UE_LOG(LogTemp, Warning, TEXT("Button pressed! Character index: %d"), CharacterClassIndex);
     
-    // Get the first player controller
-    APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+    // If no PlayerController provided, use the first player controller for backwards compatibility
+    if (!PlayerController)
+    {
+        PlayerController = GetWorld()->GetFirstPlayerController();
+        UE_LOG(LogTemp, Warning, TEXT("No PlayerController provided, using first player controller"));
+    }
+    
     if (!PlayerController)
     {
         UE_LOG(LogTemp, Error, TEXT("ERROR: No PlayerController found"));
         return;
     }
+    
+    UE_LOG(LogTemp, Warning, TEXT("Using PlayerController: %s"), *PlayerController->GetName());
 
     // Convert index to enum (0=None, 1=Warrior, 2=Mage, 3=Rogue, 4=Healer, 5=Dragon)
     ECharacterClass SelectedClass = static_cast<ECharacterClass>(CharacterClassIndex);

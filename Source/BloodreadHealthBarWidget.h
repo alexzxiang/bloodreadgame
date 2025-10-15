@@ -48,18 +48,29 @@ protected:
     void OnCharacterHealthChanged(int32 OldHealth, int32 NewHealth);
 
 protected:
-    // Widget components (optional bindings)
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
-    UProgressBar* HealthBar;
-
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    // Widget components (required bindings)
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     UProgressBar* HealthProgressBar;
 
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     UTextBlock* HealthText;
 
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     UTextBlock* CharacterClassText;
+
+    // Mana UI components
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UProgressBar* ManaProgressBar;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UTextBlock* ManaText;
+
+    // Ability UI components
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UProgressBar* Ability1ProgressBar;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    UProgressBar* Ability2ProgressBar;
 
     // Character reference
     UPROPERTY(BlueprintReadOnly, Category = "Character")
