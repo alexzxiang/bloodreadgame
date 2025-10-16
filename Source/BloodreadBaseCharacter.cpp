@@ -145,8 +145,10 @@ void ABloodreadBaseCharacter::BeginPlay()
     UE_LOG(LogTemp, Warning, TEXT("Calling InitializeFromClassData"));
     InitializeFromClassData(CharacterClassData);
     
-    // Initialize health bar UI
-    InitializeHealthBar();
+    // Skip health bar initialization in BeginPlay - it will be handled later
+    // For player characters: PlayerController will handle UI in OnPossess
+    // For AI/NPC characters: They can initialize their 3D health bars when needed
+    UE_LOG(LogTemp, Warning, TEXT("Skipping health bar initialization in BeginPlay - will be handled by appropriate system later"));
     
     // CRITICAL: Force health bar visibility check
     if (HealthBarWidgetComponent)

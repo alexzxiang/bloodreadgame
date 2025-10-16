@@ -1,5 +1,6 @@
 #include "BloodreadHealthBarWidget.h"
 #include "BloodreadBaseCharacter.h"
+#include "BloodreadPlayerCharacter.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
@@ -173,9 +174,32 @@ void UBloodreadHealthBarWidget::InitializeHealthBar(ABloodreadBaseCharacter* Cha
 
 void UBloodreadHealthBarWidget::UpdateHealthDisplay()
 {
+    // Try to find a valid character reference if we don't have one
+    if (!PlayerCharacterRef)
+    {
+        // First try to get the character from the PlayerController
+        if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+        {
+            if (ABloodreadBaseCharacter* Character = Cast<ABloodreadBaseCharacter>(PC->GetPawn()))
+            {
+                PlayerCharacterRef = Character;
+                UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Found character via PlayerController: %s"), *Character->GetName());
+            }
+        }
+        
+        // If we still don't have a character, try TargetCharacter
+        if (!PlayerCharacterRef && TargetCharacter)
+        {
+            PlayerCharacterRef = TargetCharacter;
+            UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Using TargetCharacter: %s"), *TargetCharacter->GetName());
+        }
+    }
+    
     if (!PlayerCharacterRef)
     {
         // No character reference - show default/empty state
+        UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: No character reference available"));
+        
         if (HealthProgressBar)
         {
             HealthProgressBar->SetPercent(0.0f);
@@ -303,8 +327,9 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
     // Update ability progress bars (1.0 = ready, 0.0 = on cooldown)
     if (Ability1ProgressBar)
     {
-        // For now, assume abilities are always ready (you can add cooldown logic later)
-        float Ability1Progress = 1.0f; // Replace with actual cooldown progress
+        // Get actual cooldown progress (inverted so 1.0 = ready, 0.0 = on cooldown)
+        float Ability1CooldownPercent = PlayerCharacterRef->GetAbility1CooldownPercentage();
+        float Ability1Progress = 1.0f - Ability1CooldownPercent; // Invert: 1.0 = ready, 0.0 = on cooldown
         Ability1ProgressBar->SetPercent(Ability1Progress);
         
         // Set ability bar color (green when ready, red when on cooldown)
@@ -314,8 +339,9 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
     
     if (Ability2ProgressBar)
     {
-        // For now, assume abilities are always ready (you can add cooldown logic later)
-        float Ability2Progress = 1.0f; // Replace with actual cooldown progress
+        // Get actual cooldown progress (inverted so 1.0 = ready, 0.0 = on cooldown)
+        float Ability2CooldownPercent = PlayerCharacterRef->GetAbility2CooldownPercentage();
+        float Ability2Progress = 1.0f - Ability2CooldownPercent; // Invert: 1.0 = ready, 0.0 = on cooldown
         Ability2ProgressBar->SetPercent(Ability2Progress);
         
         // Set ability bar color (green when ready, red when on cooldown)
@@ -383,7 +409,17 @@ FString UBloodreadHealthBarWidget::GetHealthText() const
     }
     else if (PlayerCharacterRef)
     {
-        return PlayerCharacterRef->GetHealthText();
+        // BloodreadPlayerCharacter doesn't have GetHealthText(), so build it from individual values
+        return FString::Printf(TEXT("%d/%d"), PlayerCharacterRef->GetCurrentHealth(), PlayerCharacterRef->GetMaxHealth());
+    }
+    
+    // Also try to find a BloodreadPlayerCharacter if we don't have a BaseCharacter reference
+    if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+    {
+        if (ABloodreadPlayerCharacter* PlayerChar = Cast<ABloodreadPlayerCharacter>(PC->GetPawn()))
+        {
+            return FString::Printf(TEXT("%d/%d"), PlayerChar->GetCurrentHealth(), PlayerChar->GetMaxHealth());
+        }
     }
     
     return FString(TEXT("0/0"));
@@ -397,8 +433,116 @@ FString UBloodreadHealthBarWidget::GetManaText() const
     }
     else if (PlayerCharacterRef)
     {
-        return PlayerCharacterRef->GetManaText();
+        // BloodreadPlayerCharacter doesn't have GetManaText(), so we need to check if it has mana properties
+        // For now, return a placeholder since PlayerCharacter might not have mana system yet
+        return FString(TEXT("N/A"));
+    }
+    
+    // Also try to find a BloodreadPlayerCharacter if we don't have a BaseCharacter reference
+    if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+    {
+        if (ABloodreadPlayerCharacter* PlayerChar = Cast<ABloodreadPlayerCharacter>(PC->GetPawn()))
+        {
+            // BloodreadPlayerCharacter doesn't have mana system, return placeholder
+            return FString(TEXT("N/A"));
+        }
     }
     
     return FString(TEXT("0/0"));
+}
+
+float UBloodreadHealthBarWidget::GetAbility1CooldownPercentage() const
+{
+    if (TargetCharacter)
+    {
+        return TargetCharacter->GetAbility1CooldownPercentage();
+    }
+    else if (PlayerCharacterRef)
+    {
+        return PlayerCharacterRef->GetAbility1CooldownPercentage();
+    }
+    
+    // Also try to find a BloodreadPlayerCharacter if we don't have a BaseCharacter reference
+    if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+    {
+        if (ABloodreadPlayerCharacter* PlayerChar = Cast<ABloodreadPlayerCharacter>(PC->GetPawn()))
+        {
+            return PlayerChar->GetAbility1CooldownPercentage();
+        }
+    }
+    
+    return 1.0f; // Default to ready (100%)
+}
+
+float UBloodreadHealthBarWidget::GetAbility2CooldownPercentage() const
+{
+    if (TargetCharacter)
+    {
+        return TargetCharacter->GetAbility2CooldownPercentage();
+    }
+    else if (PlayerCharacterRef)
+    {
+        return PlayerCharacterRef->GetAbility2CooldownPercentage();
+    }
+    
+    // Also try to find a BloodreadPlayerCharacter if we don't have a BaseCharacter reference
+    if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+    {
+        if (ABloodreadPlayerCharacter* PlayerChar = Cast<ABloodreadPlayerCharacter>(PC->GetPawn()))
+        {
+            return PlayerChar->GetAbility2CooldownPercentage();
+        }
+    }
+    
+    return 1.0f; // Default to ready (100%)
+}
+
+FString UBloodreadHealthBarWidget::GetAbility1Name() const
+{
+    if (TargetCharacter)
+    {
+        return TargetCharacter->GetAbility1Name();
+    }
+    else if (PlayerCharacterRef)
+    {
+        // BloodreadPlayerCharacter doesn't have GetAbility1Name(), return placeholder
+        return FString(TEXT("Ability 1"));
+    }
+    
+    // Also try to find a BloodreadPlayerCharacter if we don't have a BaseCharacter reference
+    if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+    {
+        if (ABloodreadPlayerCharacter* PlayerChar = Cast<ABloodreadPlayerCharacter>(PC->GetPawn()))
+        {
+            // BloodreadPlayerCharacter doesn't have ability name functions yet
+            return FString(TEXT("Ability 1"));
+        }
+    }
+    
+    return FString(TEXT("Ability 1"));
+}
+
+FString UBloodreadHealthBarWidget::GetAbility2Name() const
+{
+    if (TargetCharacter)
+    {
+        return TargetCharacter->GetAbility2Name();
+    }
+    else if (PlayerCharacterRef)
+    {
+        // BloodreadPlayerCharacter doesn't have GetAbility2Name(), return placeholder
+        return FString(TEXT("Ability 2"));
+    }
+    
+    // Also try to find a BloodreadPlayerCharacter if we don't have a BaseCharacter reference
+    if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+    {
+        if (ABloodreadPlayerCharacter* PlayerChar = Cast<ABloodreadPlayerCharacter>(PC->GetPawn()))
+        {
+            // BloodreadPlayerCharacter doesn't have ability name functions yet
+            return FString(TEXT("Ability 2"));
+        }
+    }
+    
+    return FString(TEXT("Ability 2"));
 }

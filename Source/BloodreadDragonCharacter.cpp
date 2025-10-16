@@ -13,6 +13,10 @@ ABloodreadDragonCharacter::ABloodreadDragonCharacter()
     // Set dragon-specific defaults
     UE_LOG(LogTemp, Warning, TEXT("DragonCharacter constructor - initializing dragon data"));
     InitializeDragonData();
+    
+    // Dragon-specific movement settings - better air control for aerial character
+    GetCharacterMovement()->AirControl = 0.8f; // Better air control for aerial maneuvers
+    
     UE_LOG(LogTemp, Warning, TEXT("DragonCharacter constructor complete - CurrentClass=%d"), (int32)CurrentCharacterClass);
 }
 
@@ -23,6 +27,12 @@ void ABloodreadDragonCharacter::BeginPlay()
     // Apply dragon-specific initialization
     InitializeDragonData();
     InitializeFromClassData(CharacterClassData);
+    
+    // Ensure dragon air control is applied (better for aerial abilities)
+    GetCharacterMovement()->AirControl = 0.8f; // Better air control for aerial maneuvers
+    
+    UE_LOG(LogTemp, Warning, TEXT("Dragon BeginPlay: Applied movement settings - AirControl=%.2f"), 
+           GetCharacterMovement()->AirControl);
 }
 
 void ABloodreadDragonCharacter::OnCharacterClassChanged()

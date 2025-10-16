@@ -41,10 +41,17 @@ protected:
 public:
     // Rogue-specific abilities
     UFUNCTION(BlueprintCallable, Category = "Rogue Abilities")
-    void Teleport();
+    bool Teleport();
 
     UFUNCTION(BlueprintCallable, Category = "Rogue Abilities")
     void ShadowPush();
+
+    // Networked teleport functions
+    UFUNCTION(Server, Reliable, Category = "Rogue Abilities")
+    void ServerTeleport(FVector TargetLocation, FRotator TargetRotation);
+
+    UFUNCTION(NetMulticast, Reliable, Category = "Rogue Abilities")
+    void MulticastTeleport(FVector TargetLocation, FRotator TargetRotation);
 
     // Override attack for rogue-specific combat
     virtual void Attack() override;

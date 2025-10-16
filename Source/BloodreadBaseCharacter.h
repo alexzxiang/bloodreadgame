@@ -273,10 +273,10 @@ protected:
 
     // Movement tuning properties (exposed for tweaking in editor/blueprints)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Tuning")
-    float CharacterGravityScale = 1.0f;
+    float CharacterGravityScale = 0.8f; // Reduced from 1.0f for better air control and abilities
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Tuning")
-    float CharacterJumpZVelocity = 100.0f; // Further reduced for even lower jumps
+    float CharacterJumpZVelocity = 420.0f; // Increased from 100.0f to more reasonable value (UE5 default is ~420)
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Knockback|Tuning")
     float HorizontalKnockbackMultiplier = 2.5f; // Increased horizontal push for stronger knockback

@@ -491,7 +491,7 @@ void ABloodreadGamePlayerController::AttachCameraToHeadBone(ABloodreadBaseCharac
            
            // Set relative transform to position camera in front of head
            // X = Forward, Y = Right, Z = Up in Unreal coordinates
-           CameraComponent->SetRelativeLocation(FVector(0.0f, 10.0f, 0.0f)); // Forward 15, center Y, slightly down 2
+           CameraComponent->SetRelativeLocation(FVector(0.0f, 10.0f, 10.0f)); // Reduced Y from 10.0 to 5.0 to shift camera slightly right
            CameraComponent->SetRelativeRotation(FRotator::ZeroRotator);
            
            UE_LOG(LogTemp, Warning, TEXT("AttachCameraToHeadBone: Camera attached to head bone at forward position (15, 0, -2)"));

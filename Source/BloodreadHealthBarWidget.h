@@ -37,6 +37,18 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Health Bar")
     FString GetManaText() const;
 
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Health Bar")
+    float GetAbility1CooldownPercentage() const;
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Health Bar")
+    float GetAbility2CooldownPercentage() const;
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Health Bar")
+    FString GetAbility1Name() const;
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Health Bar")
+    FString GetAbility2Name() const;
+
 protected:
     UFUNCTION()
     void BindHealthEvents(ABloodreadBaseCharacter* Character);

@@ -13,11 +13,14 @@ ABloodreadRogueCharacter::ABloodreadRogueCharacter()
     // Set rogue-specific defaults
     UE_LOG(LogTemp, Warning, TEXT("RogueCharacter constructor - initializing rogue data"));
     InitializeRogueData();
-    UE_LOG(LogTemp, Warning, TEXT("RogueCharacter constructor complete - CurrentClass=%d"), (int32)CurrentCharacterClass);
     
-    // Rogues are faster and more agile
-    GetCharacterMovement()->MaxWalkSpeed = 600.f;
-    GetCharacterMovement()->JumpZVelocity = 800.f;
+    // Rogues are faster and more agile - override base character settings
+    GetCharacterMovement()->MaxWalkSpeed = 600.f; // Faster movement
+    GetCharacterMovement()->JumpZVelocity = 600.f; // Higher jumps than base (base is now 420)
+    GetCharacterMovement()->AirControl = 0.6f; // Good air control for agility
+    
+    UE_LOG(LogTemp, Warning, TEXT("RogueCharacter constructor complete - CurrentClass=%d, JumpZVelocity=%.0f"), 
+           (int32)CurrentCharacterClass, GetCharacterMovement()->JumpZVelocity);
 }
 
 void ABloodreadRogueCharacter::BeginPlay()
@@ -27,6 +30,14 @@ void ABloodreadRogueCharacter::BeginPlay()
     // Apply rogue-specific initialization
     InitializeRogueData();  
     InitializeFromClassData(CharacterClassData);
+    
+    // Ensure rogue movement settings are applied (in case base class overrode them)
+    GetCharacterMovement()->MaxWalkSpeed = 600.f; // Faster movement
+    GetCharacterMovement()->JumpZVelocity = 600.f; // Higher jumps than base (base is now 420)
+    GetCharacterMovement()->AirControl = 0.6f; // Good air control for agility
+    
+    UE_LOG(LogTemp, Warning, TEXT("Rogue BeginPlay: Applied movement settings - JumpZVelocity=%.0f, MaxWalkSpeed=%.0f"), 
+           GetCharacterMovement()->JumpZVelocity, GetCharacterMovement()->MaxWalkSpeed);
 }
 
 void ABloodreadRogueCharacter::OnCharacterClassChanged()
@@ -38,8 +49,17 @@ void ABloodreadRogueCharacter::OnCharacterClassChanged()
 bool ABloodreadRogueCharacter::OnAbility1Used()
 {
     Super::OnAbility1Used();
-    Teleport();
-    return true;
+    bool bTeleportSuccessful = Teleport();
+    
+    // If teleport failed, refund the mana cost
+    if (!bTeleportSuccessful)
+    {
+        CurrentMana += CharacterClassData.Ability1.ManaCost;
+        CurrentMana = FMath::Min(CurrentMana, CurrentStats.Mana); // Don't exceed max mana
+        UE_LOG(LogTemp, Warning, TEXT("Teleport failed - refunding %d mana"), CharacterClassData.Ability1.ManaCost);
+    }
+    
+    return bTeleportSuccessful;
 }
 
 bool ABloodreadRogueCharacter::OnAbility2Used()
@@ -49,7 +69,7 @@ bool ABloodreadRogueCharacter::OnAbility2Used()
     return true;
 }
 
-void ABloodreadRogueCharacter::Teleport()
+bool ABloodreadRogueCharacter::Teleport()
 {
     // Rogue Ability 1: Teleport - Teleport behind target with same orientation
     UE_LOG(LogTemp, Warning, TEXT("Rogue uses Teleport!"));
@@ -63,7 +83,7 @@ void ABloodreadRogueCharacter::Teleport()
     if (!Target.Actor)
     {
         UE_LOG(LogTemp, Warning, TEXT("Teleport: No target found with universal targeting system"));
-        return;
+        return false;
     }
     
     UE_LOG(LogTemp, Warning, TEXT("Teleport: Found target %s using universal targeting"), *Target.Actor->GetName());
@@ -139,51 +159,42 @@ void ABloodreadRogueCharacter::Teleport()
             UE_LOG(LogTemp, Warning, TEXT("Teleport: TO - Position: %s, Rotation: %s"), 
                    *TeleportLocation.ToString(), *MatchTargetRotation.ToString());
             
-            // Try multiple teleport methods for reliability
+            // Use networked teleport for multiplayer compatibility
             bool bTeleportSuccess = false;
             
-            // Method 1: Use TeleportTo (Unreal's built-in safe teleport)
-            bTeleportSuccess = TeleportTo(TeleportLocation, MatchTargetRotation);
-            UE_LOG(LogTemp, Warning, TEXT("TeleportTo result: %s"), bTeleportSuccess ? TEXT("SUCCESS") : TEXT("FAILED"));
-            
-            if (!bTeleportSuccess)
+            if (GetNetMode() == NM_Standalone)
             {
-                // Method 2: Try with elevated position
-                FVector ElevatedLocation = TeleportLocation + FVector(0, 0, 100.0f);
-                bTeleportSuccess = TeleportTo(ElevatedLocation, MatchTargetRotation);
-                UE_LOG(LogTemp, Warning, TEXT("Elevated TeleportTo result: %s"), bTeleportSuccess ? TEXT("SUCCESS") : TEXT("FAILED"));
-                
-                if (bTeleportSuccess)
+                // Standalone game - apply directly
+                UE_LOG(LogTemp, Warning, TEXT("Teleport: Standalone - applying directly"));
+                bTeleportSuccess = TeleportTo(TeleportLocation, MatchTargetRotation);
+                if (!bTeleportSuccess)
                 {
-                    TeleportLocation = ElevatedLocation;
+                    FVector ElevatedLocation = TeleportLocation + FVector(0, 0, 100.0f);
+                    bTeleportSuccess = TeleportTo(ElevatedLocation, MatchTargetRotation);
+                    if (bTeleportSuccess)
+                    {
+                        TeleportLocation = ElevatedLocation;
+                    }
+                }
+                if (!bTeleportSuccess)
+                {
+                    bTeleportSuccess = SetActorLocation(TeleportLocation, false, nullptr, ETeleportType::TeleportPhysics);
+                    if (bTeleportSuccess)
+                    {
+                        SetActorRotation(MatchTargetRotation);
+                        if (GetController())
+                        {
+                            GetController()->SetControlRotation(MatchTargetRotation);
+                        }
+                    }
                 }
             }
-            
-            if (!bTeleportSuccess)
+            else
             {
-                // Method 3: Force teleport using SetActorLocation and SetActorRotation
-                UE_LOG(LogTemp, Warning, TEXT("Forcing teleport with SetActorLocation"));
-                bTeleportSuccess = SetActorLocation(TeleportLocation, false, nullptr, ETeleportType::TeleportPhysics);
-                if (bTeleportSuccess)
-                {
-                    // Force rotation update - try multiple methods for reliability
-                    SetActorRotation(MatchTargetRotation);
-                    
-                    // Also set control rotation if we have a controller (for players)
-                    if (GetController())
-                    {
-                        GetController()->SetControlRotation(MatchTargetRotation);
-                        UE_LOG(LogTemp, Warning, TEXT("Force teleport SUCCESS - Set both Actor and Control rotation"));
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("Force teleport SUCCESS - Set Actor rotation only"));
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Error, TEXT("Force teleport FAILED"));
-                }
+                // Multiplayer - use Server RPC
+                UE_LOG(LogTemp, Warning, TEXT("Teleport: Multiplayer - using Server RPC"));
+                ServerTeleport(TeleportLocation, MatchTargetRotation);
+                bTeleportSuccess = true; // Assume success for mana purposes - server will handle actual teleport
             }
             
             // Ensure rotation is properly set regardless of teleport method
@@ -231,26 +242,37 @@ void ABloodreadRogueCharacter::Teleport()
                 UE_LOG(LogTemp, Error, TEXT("*** TELEPORT COMPLETELY FAILED *** All methods failed"));
             }
             
-            // Gain 30% movement speed for 5 seconds
-            float CurrentSpeed = GetCharacterMovement()->MaxWalkSpeed;
-            GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed * (1.0f + MovementSpeedBonus);
-            
-            // Clear any existing speed boost timer
-            GetWorldTimerManager().ClearTimer(SpeedBoostTimerHandle);
-            
-            // Set timer to restore normal speed
-            GetWorldTimerManager().SetTimer(SpeedBoostTimerHandle, [this, CurrentSpeed]()
+            // Only apply movement speed boost if teleport was successful and in standalone mode
+            if (bTeleportSuccess && GetNetMode() == NM_Standalone)
             {
-                GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed;
-                UE_LOG(LogTemp, Warning, TEXT("Teleport speed boost ended"));
-            }, SpeedBoostDuration, false);
+                // Gain 30% movement speed for 5 seconds (multiplayer handled in networked functions)
+                float CurrentSpeed = GetCharacterMovement()->MaxWalkSpeed;
+                GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed * (1.0f + MovementSpeedBonus);
+                
+                // Clear any existing speed boost timer
+                GetWorldTimerManager().ClearTimer(SpeedBoostTimerHandle);
+                
+                // Set timer to restore normal speed
+                GetWorldTimerManager().SetTimer(SpeedBoostTimerHandle, [this, CurrentSpeed]()
+                {
+                    GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed;
+                    UE_LOG(LogTemp, Warning, TEXT("Teleport speed boost ended"));
+                }, SpeedBoostDuration, false);
+                
+                UE_LOG(LogTemp, Warning, TEXT("Teleported behind %s with speed boost"), *Target.Actor->GetName());
+            }
+            else if (bTeleportSuccess)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Teleported behind %s (networked - speed boost handled by RPC)"), *Target.Actor->GetName());
+            }
             
-            UE_LOG(LogTemp, Warning, TEXT("Teleported behind %s with speed boost"), *Target.Actor->GetName());
+            return bTeleportSuccess;
         }
         else
         {
             UE_LOG(LogTemp, Error, TEXT("Teleport: Cast to ABloodreadBaseCharacter FAILED for target %s (class: %s)"), 
                    *Target.Actor->GetName(), *Target.Actor->GetClass()->GetName());
+            return false;
         }
     }
     else
@@ -263,22 +285,36 @@ void ABloodreadRogueCharacter::Teleport()
         FVector ForwardVector = CameraRotation.Vector();
         
         FVector TeleportLocation = GetActorLocation() + (ForwardVector * 400.0f);
-        bool bTeleportSuccess = TeleportTo(TeleportLocation, GetActorRotation());
-        if (!bTeleportSuccess)
+        bool bTeleportSuccess = false;
+        
+        if (GetNetMode() == NM_Standalone)
         {
-            // If teleport failed, try with current ground level
-            TeleportLocation.Z = GetActorLocation().Z;
+            // Standalone game - apply directly
             bTeleportSuccess = TeleportTo(TeleportLocation, GetActorRotation());
+            if (!bTeleportSuccess)
+            {
+                // If teleport failed, try with current ground level
+                TeleportLocation.Z = GetActorLocation().Z;
+                bTeleportSuccess = TeleportTo(TeleportLocation, GetActorRotation());
+            }
+        }
+        else
+        {
+            // Multiplayer - use Server RPC
+            ServerTeleport(TeleportLocation, GetActorRotation());
+            bTeleportSuccess = true; // Assume success for mana purposes
         }
         
         if (bTeleportSuccess)
         {
-            UE_LOG(LogTemp, Warning, TEXT("No target found - teleported forward successfully"));
+            UE_LOG(LogTemp, Warning, TEXT("Forward teleport successful"));
         }
         else
         {
             UE_LOG(LogTemp, Warning, TEXT("Forward teleport failed - invalid location"));
         }
+        
+        return bTeleportSuccess;
     }
 }
 
@@ -448,6 +484,100 @@ void ABloodreadRogueCharacter::InitializeRogueData()
     CurrentStats = RogueStats;
     CurrentHealth = CurrentStats.MaxHealth;
     CurrentMana = CurrentStats.Mana;
+}
+
+// Networked teleport functions
+void ABloodreadRogueCharacter::ServerTeleport_Implementation(FVector TargetLocation, FRotator TargetRotation)
+{
+    UE_LOG(LogTemp, Warning, TEXT("ServerTeleport: Server executing teleport to %s"), *TargetLocation.ToString());
+    
+    // Apply teleport on server with authority
+    bool bTeleportSuccess = TeleportTo(TargetLocation, TargetRotation);
+    if (!bTeleportSuccess)
+    {
+        // Try elevated position
+        FVector ElevatedLocation = TargetLocation + FVector(0, 0, 100.0f);
+        bTeleportSuccess = TeleportTo(ElevatedLocation, TargetRotation);
+        if (bTeleportSuccess)
+        {
+            TargetLocation = ElevatedLocation;
+        }
+    }
+    
+    if (!bTeleportSuccess)
+    {
+        // Force teleport
+        bTeleportSuccess = SetActorLocation(TargetLocation, false, nullptr, ETeleportType::TeleportPhysics);
+        if (bTeleportSuccess)
+        {
+            SetActorRotation(TargetRotation);
+            if (GetController())
+            {
+                GetController()->SetControlRotation(TargetRotation);
+            }
+        }
+    }
+    
+    if (bTeleportSuccess)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ServerTeleport: SUCCESS - Replicating to clients"));
+        // Replicate the successful teleport to all clients
+        MulticastTeleport(TargetLocation, TargetRotation);
+        
+        // Apply movement speed boost on server
+        float CurrentSpeed = GetCharacterMovement()->MaxWalkSpeed;
+        GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed * (1.0f + MovementSpeedBonus);
+        
+        // Clear any existing speed boost timer
+        GetWorldTimerManager().ClearTimer(SpeedBoostTimerHandle);
+        
+        // Set timer to restore normal speed
+        GetWorldTimerManager().SetTimer(SpeedBoostTimerHandle, [this, CurrentSpeed]()
+        {
+            GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed;
+            UE_LOG(LogTemp, Warning, TEXT("Teleport speed boost ended"));
+        }, SpeedBoostDuration, false);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ServerTeleport: FAILED - All teleport methods failed"));
+    }
+}
+
+void ABloodreadRogueCharacter::MulticastTeleport_Implementation(FVector TargetLocation, FRotator TargetRotation)
+{
+    UE_LOG(LogTemp, Warning, TEXT("MulticastTeleport: Applying teleport on client"));
+    
+    // Don't apply on server again (it already applied in ServerTeleport)
+    if (!HasAuthority())
+    {
+        // Apply teleport on client to match server
+        bool bTeleportSuccess = TeleportTo(TargetLocation, TargetRotation);
+        if (!bTeleportSuccess)
+        {
+            // Use force teleport on client
+            SetActorLocation(TargetLocation, false, nullptr, ETeleportType::TeleportPhysics);
+            SetActorRotation(TargetRotation);
+            if (GetController())
+            {
+                GetController()->SetControlRotation(TargetRotation);
+            }
+        }
+        
+        // Apply movement speed boost on client
+        float CurrentSpeed = GetCharacterMovement()->MaxWalkSpeed;
+        GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed * (1.0f + MovementSpeedBonus);
+        
+        // Clear any existing speed boost timer
+        GetWorldTimerManager().ClearTimer(SpeedBoostTimerHandle);
+        
+        // Set timer to restore normal speed
+        GetWorldTimerManager().SetTimer(SpeedBoostTimerHandle, [this, CurrentSpeed]()
+        {
+            GetCharacterMovement()->MaxWalkSpeed = CurrentSpeed;
+            UE_LOG(LogTemp, Warning, TEXT("Client teleport speed boost ended"));
+        }, SpeedBoostDuration, false);
+    }
 }
 
 

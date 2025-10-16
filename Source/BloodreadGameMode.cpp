@@ -415,9 +415,9 @@ void ABloodreadGameMode::SpawnNewCharacter(ECharacterClass SelectedClass, APlaye
             NewCharacter->SetupInputContext();
             UE_LOG(LogTemp, Warning, TEXT("Input context setup called"));
             
-            // Show the player HUD now that character is ready
-            ShowPlayerHUD(PlayerController);
-            UE_LOG(LogTemp, Warning, TEXT("Player HUD displayed"));
+            // NOTE: Health bar initialization is now handled by PlayerController in OnPossess
+            // No need to call ShowPlayerHUD here as it would cause double initialization on server
+            UE_LOG(LogTemp, Warning, TEXT("Character setup complete - UI handled by PlayerController"));
             
             // Ensure input mode is set to game only (server-side, but clients will handle their own UI)
             PlayerController->SetInputMode(FInputModeGameOnly());
