@@ -92,9 +92,12 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
     float KnockbackUpwardForce = 100.0f;
 
-    // Movement settings
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
-    float JumpHeight = 600.0f;
+    // Movement and physics tuning
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Tuning")
+    float JumpHeight = 350.0f; // Reduced from 600 for lower jumps
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Tuning")
+    float HorizontalKnockbackMultiplier = 2.0f; // Increased horizontal knockback force
 
     // Events
     UPROPERTY(BlueprintAssignable)

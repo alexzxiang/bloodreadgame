@@ -353,16 +353,28 @@ void ABloodreadPlayerCharacter::ApplyKnockback(FVector KnockbackDirection, float
 {
     if (!IsAlive()) return;
 
-    // Add upward component to knockback
-    KnockbackDirection.Z += 0.3f;
-    KnockbackDirection = KnockbackDirection.GetSafeNormal();
+    UE_LOG(LogTemp, Warning, TEXT("PlayerChar ApplyKnockback: Original direction: %s, Force: %.2f"), *KnockbackDirection.ToString(), Force);
     
-    // Apply impulse to character
-    FVector Impulse = KnockbackDirection * Force;
-    GetCharacterMovement()->AddImpulse(Impulse, true);
+    // Enhanced knockback: Don't normalize to preserve force magnitudes
+    FVector Horizontal = FVector(KnockbackDirection.X, KnockbackDirection.Y, 0.0f);
+    Horizontal = Horizontal.GetSafeNormal();
     
-    OnKnockbackApplied(KnockbackDirection, Force);
-    UE_LOG(LogTemp, Log, TEXT("Knockback applied with force: %.2f"), Force);
+    // Apply multipliers to create enhanced force components
+    float HorizontalForce = Force * HorizontalKnockbackMultiplier;
+    float VerticalForce = Force * 0.6f; // Strong vertical component
+    
+    // Create final knockback vector with proper proportions
+    FVector EnhancedKnockback = Horizontal * HorizontalForce;
+    EnhancedKnockback.Z = VerticalForce; // Always add upward force
+    
+    UE_LOG(LogTemp, Warning, TEXT("PlayerChar ApplyKnockback: Enhanced knockback: %s (H:%.1f V:%.1f)"), 
+           *EnhancedKnockback.ToString(), HorizontalForce, VerticalForce);
+    
+    // Apply enhanced knockback directly
+    GetCharacterMovement()->AddImpulse(EnhancedKnockback, true);
+    
+    OnKnockbackApplied(EnhancedKnockback.GetSafeNormal(), EnhancedKnockback.Size());
+    UE_LOG(LogTemp, Log, TEXT("PlayerChar Knockback applied with enhanced force: %.2f"), EnhancedKnockback.Size());
 }
 
 void ABloodreadPlayerCharacter::ServerApplyKnockbackToTarget_Implementation(ACharacter* TargetCharacter, FVector KnockbackDirection, float Force)

@@ -276,10 +276,10 @@ protected:
     float CharacterGravityScale = 1.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Tuning")
-    float CharacterJumpZVelocity = 420.0f; // Reduced from 700 for lower jumps
+    float CharacterJumpZVelocity = 100.0f; // Further reduced for even lower jumps
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Knockback|Tuning")
-    float HorizontalKnockbackMultiplier = 1.5f; // Increased horizontal push
+    float HorizontalKnockbackMultiplier = 2.5f; // Increased horizontal push for stronger knockback
 
     // Mesh positioning and rotation fixes for character meshes
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mesh|Positioning")

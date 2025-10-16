@@ -1546,122 +1546,77 @@ void ABloodreadBaseCharacter::ServerApplyKnockbackToTarget_Implementation(AChara
 
 void ABloodreadBaseCharacter::ApplyKnockbackInternal(FVector KnockbackDirection, float Force)
 {
-    UE_LOG(LogTemp, Error, TEXT("🚨 ApplyKnockbackInternal: Original direction: %s, Force: %.2f"), *KnockbackDirection.ToString(), Force);
-    UE_LOG(LogTemp, Error, TEXT("🚨 Character Controller: %s, Class: %s"), 
-           GetController() ? *GetController()->GetName() : TEXT("NONE"), 
-           *GetClass()->GetName());
-    UE_LOG(LogTemp, Error, TEXT("🚨 Controller Type: %s"), 
-           GetController() ? *GetController()->GetClass()->GetName() : TEXT("NONE"));
-    UE_LOG(LogTemp, Error, TEXT("🚨 Is Possessed: %s, Has Player Controller: %s"), 
-           GetController() ? TEXT("YES") : TEXT("NO"),
-           Cast<APlayerController>(GetController()) ? TEXT("YES") : TEXT("NO"));
+    if (!GetIsAlive()) 
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BaseChar ApplyKnockbackInternal: Character is not alive, ignoring knockback"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("BaseChar ApplyKnockbackInternal: Original direction: %s, Force: %.2f"), *KnockbackDirection.ToString(), Force);
     
-    // Add upward component to knockback
-    // Bias knockback horizontally: increase X/Y relative weight, keep smaller vertical
+    // Enhanced knockback: Don't normalize to preserve force magnitudes
     FVector Horizontal = FVector(KnockbackDirection.X, KnockbackDirection.Y, 0.0f);
     Horizontal = Horizontal.GetSafeNormal();
-    float HorizontalWeight = 1.0f * HorizontalKnockbackMultiplier; // configurable
-    float VerticalWeight = 0.35f; // smaller vertical lift
-    FVector Biased = Horizontal * HorizontalWeight;
-    Biased.Z = FMath::Clamp(KnockbackDirection.Z * VerticalWeight + 0.15f, -1.0f, 1.0f);
-    KnockbackDirection = Biased.GetSafeNormal();
     
-    UE_LOG(LogTemp, Warning, TEXT("Knockback: Normalized direction: %s"), *KnockbackDirection.ToString());
+    // Apply multipliers to create enhanced force components
+    float HorizontalForce = Force * HorizontalKnockbackMultiplier;
+    float VerticalForce = Force * 0.6f; // Strong vertical component
     
-    // Calculate impulse
-    // Scale impulse: keep mostly horizontal force
-    FVector Impulse = KnockbackDirection * Force;
-    UE_LOG(LogTemp, Warning, TEXT("Knockback: Calculated impulse: %s"), *Impulse.ToString());
+    // Create final knockback vector with proper proportions
+    FVector EnhancedKnockback = Horizontal * HorizontalForce;
+    EnhancedKnockback.Z = VerticalForce; // Always add upward force regardless of original direction
     
-    // Get character movement component info
+    UE_LOG(LogTemp, Error, TEXT("BaseChar ApplyKnockbackInternal: Enhanced knockback: %s (H:%.1f V:%.1f)"), 
+           *EnhancedKnockback.ToString(), HorizontalForce, VerticalForce);
+    
+    // Get character movement component
     UCharacterMovementComponent* MovementComp = GetCharacterMovement();
     if (!MovementComp)
     {
-        UE_LOG(LogTemp, Error, TEXT("Knockback: CharacterMovementComponent is NULL!"));
+        UE_LOG(LogTemp, Error, TEXT("BaseChar ApplyKnockbackInternal: CharacterMovementComponent is NULL!"));
         return;
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("Knockback: Movement comp - Mass: %.2f, MaxWalkSpeed: %.2f, GroundFriction: %.2f"), 
-           MovementComp->Mass, MovementComp->MaxWalkSpeed, MovementComp->GroundFriction);
-    UE_LOG(LogTemp, Warning, TEXT("Knockback: Movement mode: %d, IsOnGround: %s"), 
-           (int32)MovementComp->MovementMode, MovementComp->IsMovingOnGround() ? TEXT("true") : TEXT("false"));
+    // Apply the enhanced knockback directly (no additional force multiplication)
+    UE_LOG(LogTemp, Error, TEXT("BaseChar ApplyKnockbackInternal: Applying enhanced knockback: %s"), *EnhancedKnockback.ToString());
     
-    // Try multiple knockback methods for reliability
-    bool bKnockbackApplied = false;
+    // Method 1: AddImpulse with the enhanced knockback vector
+    MovementComp->AddImpulse(EnhancedKnockback, true); // true = ignore mass for consistent knockback
     
-    // CRITICAL: Disable AI input temporarily to prevent interference
+    // Method 2: LaunchCharacter as backup (especially useful if character is on ground)
+    if (MovementComp->IsMovingOnGround())
+    {
+        FVector LaunchVelocity = EnhancedKnockback * 0.8f;
+        UE_LOG(LogTemp, Error, TEXT("BaseChar ApplyKnockbackInternal: Also launching character with velocity: %s"), *LaunchVelocity.ToString());
+        LaunchCharacter(LaunchVelocity, false, false);
+    }
+    
+    // Check velocity after impulse
+    FVector PostImpulseVelocity = MovementComp->Velocity;
+    UE_LOG(LogTemp, Error, TEXT("BaseChar ApplyKnockbackInternal: Post-impulse velocity: %s"), *PostImpulseVelocity.ToString());
+    
+    UE_LOG(LogTemp, Log, TEXT("BaseChar ApplyKnockbackInternal: Applied enhanced knockback with force: %.2f"), Force);
+    
+    // Optional: Disable AI input briefly to prevent interference (for AI-controlled characters)
     if (AController* CurrentController = GetController())
     {
-        // Disable input for AI controllers during knockback
         if (!Cast<APlayerController>(CurrentController))
         {
-            UE_LOG(LogTemp, Error, TEXT("🚨 DISABLING AI INPUT - Detected AI Controller: %s"), *CurrentController->GetName());
             CurrentController->SetIgnoreMoveInput(true);
             
-            // Re-enable input after knockback duration
+            // Re-enable input after a short duration
             GetWorld()->GetTimerManager().SetTimer(KnockbackRecoveryTimerHandle, [this]()
             {
                 if (AController* Controller = GetController())
                 {
                     Controller->SetIgnoreMoveInput(false);
-                    UE_LOG(LogTemp, Warning, TEXT("🚨 AI INPUT RE-ENABLED after knockback"));
                 }
-            }, 1.0f, false);
+            }, 0.5f, false);
         }
     }
-
-    // Method 1: AddImpulse with mass override
-    UE_LOG(LogTemp, Warning, TEXT("Knockback: Trying Method 1 - AddImpulse with mass override"));
-    MovementComp->AddImpulse(Impulse, true); // true = ignore mass
-    bKnockbackApplied = true;
     
-    // Method 2: If character is on ground, also try Launch
-    if (MovementComp->IsMovingOnGround())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Knockback: Trying Method 2 - LaunchCharacter (on ground)"));
-        FVector LaunchVelocity = KnockbackDirection * Force * 0.8f; // Slightly reduced for Launch
-        LaunchCharacter(LaunchVelocity, false, false);
-        bKnockbackApplied = true;
-    }
-    
-    // Method 3: Direct velocity manipulation as backup
-    FVector CurrentVelocity = MovementComp->Velocity;
-    FVector NewVelocity = CurrentVelocity + (KnockbackDirection * Force * 0.5f);
-    UE_LOG(LogTemp, Warning, TEXT("Knockback: Current velocity: %s, Adding: %s"), 
-           *CurrentVelocity.ToString(), *(KnockbackDirection * Force * 0.5f).ToString());
-    
-    // Method 4: Force velocity directly
-    UE_LOG(LogTemp, Error, TEXT("🚨 Method 4: FORCING velocity directly"));
-    MovementComp->Velocity = KnockbackDirection * Force;
-    UE_LOG(LogTemp, Error, TEXT("🚨 Forced velocity to: %s"), *MovementComp->Velocity.ToString());
-    
-    // Method 5: Try stopping movement first, then applying force
-    UE_LOG(LogTemp, Error, TEXT("🚨 Method 5: Stopping movement then applying force"));
-    MovementComp->StopMovementImmediately();
-    MovementComp->AddImpulse(Impulse * 2.0f, true); // Double the force
-    
-    // Method 6: Use SetActorLocation for instant displacement (as last resort)
-    FVector DisplacementVector = KnockbackDirection * 50.0f; // 50 units displacement
-    FVector NewLocation = GetActorLocation() + DisplacementVector;
-    UE_LOG(LogTemp, Error, TEXT("🚨 Method 6: Attempting displacement from %s to %s"), 
-           *GetActorLocation().ToString(), *NewLocation.ToString());
-    SetActorLocation(NewLocation, true);
-    
-    // Check if position actually changed
-    FVector ActualNewLocation = GetActorLocation();
-    float DisplacementDistance = FVector::Dist(GetActorLocation(), NewLocation);
-    UE_LOG(LogTemp, Error, TEXT("🚨 Displacement result: Target=%s, Actual=%s, Distance=%.2f"), 
-           *NewLocation.ToString(), *ActualNewLocation.ToString(), DisplacementDistance);
-    
-    // Store velocity to check if it changes
-    GetWorld()->GetTimerManager().SetTimerForNextTick([this, MovementComp, Impulse]()
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Knockback: Post-impulse velocity: %s"), *MovementComp->Velocity.ToString());
-        UE_LOG(LogTemp, Warning, TEXT("=== KNOCKBACK DEBUG END ==="));
-    });
-    
-    OnKnockbackApplied(KnockbackDirection, Force);
-    UE_LOG(LogTemp, Warning, TEXT("Knockback: Applied with force %.2f - Success: %s"), Force, bKnockbackApplied ? TEXT("YES") : TEXT("NO"));
+    // Call Blueprint event for knockback effects
+    OnKnockbackApplied(EnhancedKnockback.GetSafeNormal(), EnhancedKnockback.Size());
 }
 
 bool ABloodreadBaseCharacter::TakeCustomDamage(int32 Damage, ABloodreadBaseCharacter* Attacker)
