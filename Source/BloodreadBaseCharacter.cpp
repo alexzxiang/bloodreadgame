@@ -46,7 +46,9 @@ ABloodreadBaseCharacter::ABloodreadBaseCharacter()
     // Configure character movement for smooth first-person controls
     GetCharacterMovement()->bOrientRotationToMovement = false; // FIXED: Don't rotate body to movement direction
     GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f); // Smooth rotation rate
-    GetCharacterMovement()->JumpZVelocity = 700.f;
+    // Use tunable jump and gravity values
+    GetCharacterMovement()->JumpZVelocity = CharacterJumpZVelocity;
+    GetCharacterMovement()->GravityScale = CharacterGravityScale;
     GetCharacterMovement()->AirControl = 0.35f;
     GetCharacterMovement()->MaxWalkSpeed = 500.f;
     GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
@@ -75,6 +77,18 @@ ABloodreadBaseCharacter::ABloodreadBaseCharacter()
     FirstPersonCamera->SetupAttachment(RootComponent);
     FirstPersonCamera->SetRelativeLocation(CustomMeshCameraOffset);
     FirstPersonCamera->bUsePawnControlRotation = true;
+
+    // CRITICAL: Fix mesh positioning for character meshes (Shinbi, etc.)
+    // Most character meshes are designed for different coordinate systems
+    USkeletalMeshComponent* CharacterMesh = GetMesh();
+    if (CharacterMesh)
+    {
+        // Apply the positioning and rotation offsets
+        CharacterMesh->SetRelativeLocation(MeshLocationOffset);
+        CharacterMesh->SetRelativeRotation(MeshRotationOffset);
+        UE_LOG(LogTemp, Warning, TEXT("BloodreadBaseCharacter: Applied mesh offsets - Location: %s, Rotation: %s"), 
+               *MeshLocationOffset.ToString(), *MeshRotationOffset.ToString());
+    }
 
     // Initialize default stats
     CurrentStats = FCharacterStats();
@@ -1435,12 +1449,19 @@ void ABloodreadBaseCharacter::ApplyKnockback(FVector KnockbackDirection, float F
            Cast<APlayerController>(GetController()) ? TEXT("YES") : TEXT("NO"));
     
     // Add upward component to knockback
-    KnockbackDirection.Z += 0.3f;
-    KnockbackDirection = KnockbackDirection.GetSafeNormal();
+    // Bias knockback horizontally: increase X/Y relative weight, keep smaller vertical
+    FVector Horizontal = FVector(KnockbackDirection.X, KnockbackDirection.Y, 0.0f);
+    Horizontal = Horizontal.GetSafeNormal();
+    float HorizontalWeight = 1.0f * HorizontalKnockbackMultiplier; // configurable
+    float VerticalWeight = 0.35f; // smaller vertical lift
+    FVector Biased = Horizontal * HorizontalWeight;
+    Biased.Z = FMath::Clamp(KnockbackDirection.Z * VerticalWeight + 0.15f, -1.0f, 1.0f);
+    KnockbackDirection = Biased.GetSafeNormal();
     
     UE_LOG(LogTemp, Warning, TEXT("Knockback: Normalized direction: %s"), *KnockbackDirection.ToString());
     
     // Calculate impulse
+    // Scale impulse: keep mostly horizontal force
     FVector Impulse = KnockbackDirection * Force;
     UE_LOG(LogTemp, Warning, TEXT("Knockback: Calculated impulse: %s"), *Impulse.ToString());
     

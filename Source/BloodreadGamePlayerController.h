@@ -34,6 +34,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void HideCharacterSelectionWidget();
 
+	/** Request character selection (multiplayer-safe) - call this from UI */
+	UFUNCTION(BlueprintCallable, Category = "Character Selection")
+	void RequestCharacterSelection(int32 CharacterClassIndex);
+
+	/** Server RPC to handle character selection */
+	UFUNCTION(Server, Reliable, Category = "Character Selection")
+	void ServerRequestCharacterSelection(int32 CharacterClassIndex);
+
+	/** Client RPC to notify client of successful character possession */
+	UFUNCTION(Client, Reliable, Category = "Character Selection")
+	void ClientNotifyCharacterPossession(APawn* NewCharacter);
+
+	/** Server RPC to request possession of a specific character */
+	UFUNCTION(Server, Reliable, Category = "Character Selection")
+	void ServerRequestPossession(APawn* CharacterToPossess);
+
 protected:
 
 	/** Gameplay initialization */
@@ -41,6 +57,10 @@ protected:
 
 	/** Called when possessing a pawn */
 	virtual void OnPossess(APawn* InPawn) override;
+
+	/** Perform possession operations (UI setup, input, etc.) */
+	UFUNCTION(BlueprintCallable, Category = "Character")
+	void PerformPossessionOperations(APawn* InPawn);
 
 	/** Initialize character mesh and systems */
 	UFUNCTION(BlueprintCallable, Category = "Character")
@@ -88,5 +108,7 @@ protected:
 	UCharacterSelectionManager* CharacterSelectionManager;
 
 private:
+	// Timer handle for checking possession after RPC
+	FTimerHandle CheckPossessionTimerHandle;
 
 };

@@ -270,6 +270,23 @@ protected:
     UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Stats")
     int32 CurrentMana = 50;
 
+    // Movement tuning properties (exposed for tweaking in editor/blueprints)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Tuning")
+    float CharacterGravityScale = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Tuning")
+    float CharacterJumpZVelocity = 420.0f; // Reduced from 700 for lower jumps
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Knockback|Tuning")
+    float HorizontalKnockbackMultiplier = 1.5f; // Increased horizontal push
+
+    // Mesh positioning and rotation fixes for character meshes
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mesh|Positioning")
+    FVector MeshLocationOffset = FVector(0.0f, 0.0f, -110.0f); // Lower mesh by 110 units
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mesh|Positioning")
+    FRotator MeshRotationOffset = FRotator(0.0f, -90.0f, 0.0f); // Rotate mesh -90 degrees on Yaw
+
     // Network replication functions
     UFUNCTION()
     void OnRep_Health();
@@ -555,9 +572,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void AttackTarget();
 
-    // Knockback system
+    // Knockback system - with networking support
     UFUNCTION(BlueprintCallable, Category = "Combat")
     virtual void ApplyKnockback(FVector KnockbackDirection, float Force);
+
+    // Networked knockback - called on server, replicated to all clients
+    UFUNCTION(NetMulticast, Reliable, Category = "Combat")
+    void MulticastApplyKnockback(FVector KnockbackDirection, float Force);
+
+    // Server-side knockback initiation (called from attacking player)
+    UFUNCTION(Server, Reliable, Category = "Combat")
+    void ServerApplyKnockback(FVector KnockbackDirection, float Force);
 
     // Combat damage system (virtual so subclasses can override)
     UFUNCTION(BlueprintCallable, Category = "Combat")

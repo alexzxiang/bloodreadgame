@@ -30,7 +30,7 @@ public:
     void HideCharacterSelectionWidget();
 
     UFUNCTION(BlueprintCallable, Category="HUD Management")
-    void ShowPlayerHUD();
+    void ShowPlayerHUD(APlayerController* TargetPlayerController = nullptr);
 
     UFUNCTION(BlueprintCallable, Category="HUD Management")
     void HidePlayerHUD();
@@ -38,14 +38,8 @@ public:
     UFUNCTION(BlueprintCallable, Category="Character Selection")
     void HandleCharacterSelection(int32 CharacterClassIndex, APlayerController* PlayerController = nullptr);
     
-    UFUNCTION(BlueprintCallable, Category="Character Selection") 
-    void OnCharacterSelected(int32 CharacterClassIndex);
-    
-    UFUNCTION(BlueprintCallable, Category="HUD Management")
-    void InitializePlayerUI(APlayerController* PlayerController);
-    
     UFUNCTION(BlueprintCallable, Category="Character Selection")
-    void SpawnSelectedCharacter(ECharacterClass SelectedClass, APlayerController* PlayerController);
+    void SpawnSelectedCharacter(ECharacterClass SelectedClass, APlayerController* PlayerController, int32 CharacterClassIndex);
     
     // New function for spawning character after UI selection
     UFUNCTION(BlueprintCallable, Category="Character Selection")
@@ -72,7 +66,10 @@ protected:
 
     // Timer handle for character possession
     FTimerHandle PossessionTimerHandle;
+    
+    // Timer handle for re-possession attempts
+    FTimerHandle RepossessionTimerHandle;
 
     // Helper function for spawning characters with proper timing
-    void SpawnNewCharacter(ECharacterClass SelectedClass, APlayerController* PlayerController, FVector SpawnLocation, FRotator SpawnRotation);
+    void SpawnNewCharacter(ECharacterClass SelectedClass, APlayerController* PlayerController, FVector SpawnLocation, FRotator SpawnRotation, int32 CharacterClassIndex);
 };

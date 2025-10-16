@@ -126,14 +126,40 @@ void ABloodreadGameMode::HideCharacterSelectionWidget()
 
 void ABloodreadGameMode::HandleCharacterSelection(int32 CharacterClassIndex, APlayerController* PlayerController)
 {
+    UE_LOG(LogTemp, Error, TEXT("🚨🚨🚨 HANDLE CHARACTER SELECTION CALLED 🚨🚨🚨"));
     UE_LOG(LogTemp, Warning, TEXT("=== CHARACTER SELECTION STARTED ==="));
     UE_LOG(LogTemp, Warning, TEXT("Button pressed! Character index: %d"), CharacterClassIndex);
+    UE_LOG(LogTemp, Error, TEXT("🚨 GAMEMODE: Received PlayerController parameter: %s 🚨"), PlayerController ? *PlayerController->GetName() : TEXT("NULL"));
+    UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: PlayerController pointer address: %p"), PlayerController);
+    UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: PlayerController IsValid: %s"), IsValid(PlayerController) ? TEXT("TRUE") : TEXT("FALSE"));
     
-    // If no PlayerController provided, use the first player controller for backwards compatibility
-    if (!PlayerController)
+    // Enhanced PlayerController logging
+    if (PlayerController)
     {
+        UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: PlayerController provided: %s"), *PlayerController->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: PlayerController Class: %s"), *PlayerController->GetClass()->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: PlayerController HasAuthority: %s"), PlayerController->HasAuthority() ? TEXT("TRUE") : TEXT("FALSE"));
+        UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: PlayerController IsLocalController: %s"), PlayerController->IsLocalController() ? TEXT("TRUE") : TEXT("FALSE"));
+        
+        // Check current pawn
+        APawn* CurrentPawn = PlayerController->GetPawn();
+        if (CurrentPawn)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: PlayerController already has pawn: %s"), *CurrentPawn->GetName());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: PlayerController has no current pawn"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: No PlayerController provided, using first player controller"));
         PlayerController = GetWorld()->GetFirstPlayerController();
-        UE_LOG(LogTemp, Warning, TEXT("No PlayerController provided, using first player controller"));
+        if (PlayerController)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("GAMEMODE: Found first player controller: %s"), *PlayerController->GetName());
+        }
     }
     
     if (!PlayerController)
@@ -174,84 +200,25 @@ void ABloodreadGameMode::HandleCharacterSelection(int32 CharacterClassIndex, APl
     }
     UE_LOG(LogTemp, Warning, TEXT("Selected Character: %s (Index: %d)"), *ClassName, CharacterClassIndex);
     
-    // Call the character selected event first
-    OnCharacterSelected(CharacterClassIndex);
+    UE_LOG(LogTemp, Error, TEXT("🚨 ABOUT TO SET SPAWN TIMER 🚨"));
     
     // Small delay before spawning to ensure UI cleanup
-    GetWorld()->GetTimerManager().SetTimerForNextTick([this, SelectedClass, PlayerController, ClassName]()
+    GetWorld()->GetTimerManager().SetTimerForNextTick([this, SelectedClass, PlayerController, ClassName, CharacterClassIndex]()
     {
+        UE_LOG(LogTemp, Error, TEXT("🚨 SPAWN TIMER EXECUTED 🚨"));
         UE_LOG(LogTemp, Warning, TEXT("UI hidden, now spawning %s character..."), *ClassName);
-        SpawnSelectedCharacter(SelectedClass, PlayerController);
+        UE_LOG(LogTemp, Warning, TEXT("SPAWN TIMER: PlayerController: %s"), PlayerController ? *PlayerController->GetName() : TEXT("NULL"));
+        UE_LOG(LogTemp, Warning, TEXT("SPAWN TIMER: About to call SpawnSelectedCharacter"));
+        SpawnSelectedCharacter(SelectedClass, PlayerController, CharacterClassIndex);
     });
 }
 
-void ABloodreadGameMode::OnCharacterSelected(int32 CharacterClassIndex)
+void ABloodreadGameMode::SpawnSelectedCharacter(ECharacterClass SelectedClass, APlayerController* PlayerController, int32 CharacterClassIndex)
 {
-    UE_LOG(LogTemp, Warning, TEXT("OnCharacterSelected called with index: %d"), CharacterClassIndex);
+    UE_LOG(LogTemp, Error, TEXT("🚨 SPAWN SELECTED CHARACTER CALLED 🚨"));
+    UE_LOG(LogTemp, Warning, TEXT("SPAWN SELECTED: PlayerController: %s"), PlayerController ? *PlayerController->GetName() : TEXT("NULL"));
+    UE_LOG(LogTemp, Warning, TEXT("SPAWN SELECTED: SelectedClass: %d"), (int32)SelectedClass);
     
-    // Get the first player controller
-    APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
-    if (!PlayerController)
-    {
-        UE_LOG(LogTemp, Error, TEXT("OnCharacterSelected: No PlayerController found"));
-        return;
-    }
-    
-    // Cast to our custom player controller to access health bar functionality
-    ABloodreadGamePlayerController* BloodreadController = Cast<ABloodreadGamePlayerController>(PlayerController);
-    if (BloodreadController)
-    {
-        // Get the character that should be possessed by now
-        ABloodreadBaseCharacter* PlayerCharacter = Cast<ABloodreadBaseCharacter>(BloodreadController->GetPawn());
-        if (PlayerCharacter)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("OnCharacterSelected: Initializing health bar widget for character: %s"), *PlayerCharacter->GetName());
-            BloodreadController->InitializeHealthBarWidget(PlayerCharacter);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("OnCharacterSelected: Character not possessed yet, will initialize health bar later"));
-        }
-    }
-    
-    // Also initialize the player UI
-    InitializePlayerUI(PlayerController);
-}
-
-void ABloodreadGameMode::InitializePlayerUI(APlayerController* PlayerController)
-{
-    UE_LOG(LogTemp, Warning, TEXT("InitializePlayerUI called"));
-    
-    if (!PlayerController)
-    {
-        UE_LOG(LogTemp, Error, TEXT("InitializePlayerUI: PlayerController is null"));
-        return;
-    }
-    
-    // Cast to our custom player controller to access health bar functionality
-    ABloodreadGamePlayerController* BloodreadController = Cast<ABloodreadGamePlayerController>(PlayerController);
-    if (BloodreadController)
-    {
-        // Get the possessed character
-        ABloodreadBaseCharacter* PlayerCharacter = Cast<ABloodreadBaseCharacter>(BloodreadController->GetPawn());
-        if (PlayerCharacter)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("InitializePlayerUI: Initializing health bar widget for character: %s"), *PlayerCharacter->GetName());
-            BloodreadController->InitializeHealthBarWidget(PlayerCharacter);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("InitializePlayerUI: No character possessed yet"));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("InitializePlayerUI: PlayerController is not BloodreadGamePlayerController"));
-    }
-}
-
-void ABloodreadGameMode::SpawnSelectedCharacter(ECharacterClass SelectedClass, APlayerController* PlayerController)
-{
     if (!PlayerController)
     {
         UE_LOG(LogTemp, Error, TEXT("SpawnSelectedCharacter: PlayerController is null"));
@@ -284,14 +251,14 @@ void ABloodreadGameMode::SpawnSelectedCharacter(ECharacterClass SelectedClass, A
         UE_LOG(LogTemp, Warning, TEXT("Destroyed existing player pawn"));
         
         // Wait a frame for destruction to complete
-        GetWorld()->GetTimerManager().SetTimerForNextTick([this, SelectedClass, PlayerController, SpawnLocation, SpawnRotation]()
+        GetWorld()->GetTimerManager().SetTimerForNextTick([this, SelectedClass, PlayerController, SpawnLocation, SpawnRotation, CharacterClassIndex]()
         {
-            SpawnNewCharacter(SelectedClass, PlayerController, SpawnLocation, SpawnRotation);
+            SpawnNewCharacter(SelectedClass, PlayerController, SpawnLocation, SpawnRotation, CharacterClassIndex);
         });
     }
     else
     {
-        SpawnNewCharacter(SelectedClass, PlayerController, SpawnLocation, SpawnRotation);
+        SpawnNewCharacter(SelectedClass, PlayerController, SpawnLocation, SpawnRotation, CharacterClassIndex);
     }
 }
 
@@ -320,9 +287,12 @@ ABloodreadBaseCharacter* ABloodreadGameMode::CreateCharacterOfClass(ECharacterCl
     return SpawnedCharacter;
 }
 
-void ABloodreadGameMode::SpawnNewCharacter(ECharacterClass SelectedClass, APlayerController* PlayerController, FVector SpawnLocation, FRotator SpawnRotation)
+void ABloodreadGameMode::SpawnNewCharacter(ECharacterClass SelectedClass, APlayerController* PlayerController, FVector SpawnLocation, FRotator SpawnRotation, int32 CharacterClassIndex)
 {
+    UE_LOG(LogTemp, Error, TEXT("🚨 SPAWN NEW CHARACTER CALLED 🚨"));
     UE_LOG(LogTemp, Warning, TEXT("=== SPAWNING NEW CHARACTER ==="));
+    UE_LOG(LogTemp, Warning, TEXT("SPAWN: PlayerController: %s"), PlayerController ? *PlayerController->GetName() : TEXT("NULL"));
+    UE_LOG(LogTemp, Warning, TEXT("SPAWN: SelectedClass: %d"), (int32)SelectedClass);
     
     // Spawn the selected character
     ABloodreadBaseCharacter* NewCharacter = CreateCharacterOfClass(SelectedClass, SpawnLocation, SpawnRotation);
@@ -330,18 +300,111 @@ void ABloodreadGameMode::SpawnNewCharacter(ECharacterClass SelectedClass, APlaye
     if (NewCharacter)
     {
         UE_LOG(LogTemp, Warning, TEXT("Character spawned successfully, setting up possession..."));
+        UE_LOG(LogTemp, Warning, TEXT("SPAWN: NewCharacter: %s"), *NewCharacter->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("SPAWN: NewCharacter bReplicates: %s"), NewCharacter->GetIsReplicated() ? TEXT("TRUE") : TEXT("FALSE"));
+        UE_LOG(LogTemp, Warning, TEXT("SPAWN: NewCharacter NetMode: %d"), (int32)NewCharacter->GetNetMode());
         
         // Ensure character is properly set up BEFORE possession
         NewCharacter->SetActorTickEnabled(true);
         NewCharacter->SetActorEnableCollision(true);
         
+        // Force replication settings
+        NewCharacter->SetReplicates(true);
+        NewCharacter->SetReplicateMovement(true);
+        UE_LOG(LogTemp, Warning, TEXT("SPAWN: Forced replication settings on character"));
+        
+        UE_LOG(LogTemp, Error, TEXT("🚨 ABOUT TO SET POSSESSION TIMER 🚨"));
+        
         // Small delay before possession to ensure character is fully initialized
-        GetWorld()->GetTimerManager().SetTimer(PossessionTimerHandle, [this, PlayerController, NewCharacter, SelectedClass]()
+        GetWorld()->GetTimerManager().SetTimer(PossessionTimerHandle, [this, PlayerController, NewCharacter, SelectedClass, CharacterClassIndex]()
         {
+            UE_LOG(LogTemp, Error, TEXT("🚨🚨🚨 POSSESSION TIMER EXECUTED 🚨🚨🚨"));
+            UE_LOG(LogTemp, Warning, TEXT("=== POSSESSION TIMER STARTED ==="));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: PlayerController: %s"), PlayerController ? *PlayerController->GetName() : TEXT("NULL"));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: NewCharacter: %s"), NewCharacter ? *NewCharacter->GetName() : TEXT("NULL"));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: PlayerController IsValid: %s"), IsValid(PlayerController) ? TEXT("TRUE") : TEXT("FALSE"));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: NewCharacter IsValid: %s"), IsValid(NewCharacter) ? TEXT("TRUE") : TEXT("FALSE"));
+            
+            if (!PlayerController)
+            {
+                UE_LOG(LogTemp, Error, TEXT("POSSESSION: PlayerController is NULL in timer!"));
+                return;
+            }
+            
+            if (!NewCharacter)
+            {
+                UE_LOG(LogTemp, Error, TEXT("POSSESSION: NewCharacter is NULL in timer!"));
+                return;
+            }
+            
             UE_LOG(LogTemp, Warning, TEXT("Starting possession process..."));
             
+            // Check if PlayerController already has a pawn
+            APawn* CurrentPawn = PlayerController->GetPawn();
+            if (CurrentPawn)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("POSSESSION: PlayerController already possesses: %s"), *CurrentPawn->GetName());
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("POSSESSION: PlayerController has no current pawn"));
+            }
+            
             // Possess the character FIRST
+            UE_LOG(LogTemp, Error, TEXT("🚨🚨🚨 ABOUT TO POSSESS 🚨🚨🚨"));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: About to call PlayerController->Possess()"));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: PlayerController Name: %s"), *PlayerController->GetName());
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: PlayerController IsLocalController: %s"), PlayerController->IsLocalController() ? TEXT("TRUE") : TEXT("FALSE"));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: NewCharacter Name: %s"), *NewCharacter->GetName());
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: NewCharacter bReplicates: %s"), NewCharacter->GetIsReplicated() ? TEXT("TRUE") : TEXT("FALSE"));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: NewCharacter NetMode: %d"), (int32)NewCharacter->GetNetMode());
             PlayerController->Possess(NewCharacter);
+            UE_LOG(LogTemp, Error, TEXT("🚨🚨🚨 POSSESS CALL COMPLETED 🚨🚨🚨"));
+            UE_LOG(LogTemp, Warning, TEXT("POSSESSION: PlayerController->Possess() completed"));
+            
+            // Force a second possession attempt with delay to ensure replication
+            GetWorld()->GetTimerManager().SetTimer(RepossessionTimerHandle, [this, PlayerController, NewCharacter]()
+            {
+                UE_LOG(LogTemp, Warning, TEXT("REPOSSESSION: Attempting second possession to force replication"));
+                UE_LOG(LogTemp, Warning, TEXT("REPOSSESSION: PlayerController: %s"), *PlayerController->GetName());
+                UE_LOG(LogTemp, Warning, TEXT("REPOSSESSION: Character: %s"), *NewCharacter->GetName());
+                
+                // Force unpossess and re-possess to trigger replication
+                PlayerController->UnPossess();
+                UE_LOG(LogTemp, Warning, TEXT("REPOSSESSION: Unpossessed"));
+                
+                // Small delay before re-possessing
+                GetWorld()->GetTimerManager().SetTimerForNextTick([this, PlayerController, NewCharacter]()
+                {
+                    PlayerController->Possess(NewCharacter);
+                    UE_LOG(LogTemp, Warning, TEXT("REPOSSESSION: Re-possessed character"));
+                });
+                
+            }, 0.5f, false);
+            
+            // Verify possession worked
+            APawn* NewCurrentPawn = PlayerController->GetPawn();
+            if (NewCurrentPawn == NewCharacter)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("POSSESSION: SUCCESS - PlayerController now possesses the new character"));
+                
+                // Notify the client via RPC that possession happened
+                if (ABloodreadGamePlayerController* BloodreadPC = Cast<ABloodreadGamePlayerController>(PlayerController))
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("POSSESSION: Calling Client RPC to notify client of possession"));
+                    BloodreadPC->ClientNotifyCharacterPossession(NewCharacter);
+                    UE_LOG(LogTemp, Warning, TEXT("POSSESSION: Client RPC called"));
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("POSSESSION: FAILED - PlayerController->GetPawn() != NewCharacter"));
+                UE_LOG(LogTemp, Error, TEXT("POSSESSION: Expected: %s, Got: %s"), 
+                       *NewCharacter->GetName(), 
+                       NewCurrentPawn ? *NewCurrentPawn->GetName() : TEXT("NULL"));
+                return;
+            }
+            
             UE_LOG(LogTemp, Warning, TEXT("Character possessed by controller"));
             
             // NOW enable input AFTER possession
@@ -353,10 +416,10 @@ void ABloodreadGameMode::SpawnNewCharacter(ECharacterClass SelectedClass, APlaye
             UE_LOG(LogTemp, Warning, TEXT("Input context setup called"));
             
             // Show the player HUD now that character is ready
-            ShowPlayerHUD();
+            ShowPlayerHUD(PlayerController);
             UE_LOG(LogTemp, Warning, TEXT("Player HUD displayed"));
             
-            // Ensure input mode is set to game only
+            // Ensure input mode is set to game only (server-side, but clients will handle their own UI)
             PlayerController->SetInputMode(FInputModeGameOnly());
             PlayerController->SetShowMouseCursor(false);
             
@@ -375,12 +438,23 @@ void ABloodreadGameMode::SpawnNewCharacter(ECharacterClass SelectedClass, APlaye
     }
 }
 
-void ABloodreadGameMode::ShowPlayerHUD()
+void ABloodreadGameMode::ShowPlayerHUD(APlayerController* TargetPlayerController)
 {
     UE_LOG(LogTemp, Warning, TEXT("ShowPlayerHUD called - initializing health bar widget"));
+    UE_LOG(LogTemp, Warning, TEXT("ShowPlayerHUD: TargetPlayerController: %s"), TargetPlayerController ? *TargetPlayerController->GetName() : TEXT("NULL"));
     
-    // Get the first player controller
-    APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+    // Use the provided PlayerController instead of GetFirstPlayerController
+    APlayerController* PlayerController = TargetPlayerController;
+    if (!PlayerController)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ShowPlayerHUD: No PlayerController provided, falling back to first player controller"));
+        PlayerController = GetWorld()->GetFirstPlayerController();
+        if (PlayerController)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("ShowPlayerHUD: Using fallback PlayerController: %s"), *PlayerController->GetName());
+        }
+    }
+    
     if (!PlayerController)
     {
         UE_LOG(LogTemp, Error, TEXT("ShowPlayerHUD: No PlayerController found"));
