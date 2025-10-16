@@ -122,6 +122,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="Combat")
     void ApplyKnockback(FVector KnockbackDirection, float Force);
 
+    // Server RPC to apply knockback to another player (called by attacker)
+    UFUNCTION(Server, Reliable, Category = "Combat")
+    void ServerApplyKnockbackToTarget(ACharacter* TargetCharacter, FVector KnockbackDirection, float Force);
+
     UFUNCTION(BlueprintCallable, Category="Combat")
     void Heal(int32 Amount);
 

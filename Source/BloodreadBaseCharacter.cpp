@@ -18,6 +18,7 @@
 #include "PracticeDummy.h"
 #include "BloodreadWarriorCharacter.h"
 #include "BloodreadMageCharacter.h"
+#include "BloodreadPlayerCharacter.h"
 #include "BloodreadRogueCharacter.h"
 #include "BloodreadHealerCharacter.h"
 #include "BloodreadHealthBarWidget.h"
@@ -1408,8 +1409,18 @@ void ABloodreadBaseCharacter::AttackTarget()
             // Apply damage to player
             TargetPlayer->TakeCustomDamage(TotalDamage, this);
             
-            // Apply knockback to player
-            TargetPlayer->ApplyKnockback(KnockbackDirection, BasicAttackKnockbackForce);
+            // Apply knockback through the attacking player's Server RPC (proper ownership)
+            if (GetNetMode() != NM_Standalone && !HasAuthority())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Client requesting knockback via ServerApplyKnockbackToTarget"));
+                ServerApplyKnockbackToTarget(TargetPlayer, KnockbackDirection, BasicAttackKnockbackForce);
+            }
+            else
+            {
+                // Server or standalone - apply directly
+                UE_LOG(LogTemp, Warning, TEXT("Server/Standalone applying knockback directly"));
+                TargetPlayer->ApplyKnockback(KnockbackDirection, BasicAttackKnockbackForce);
+            }
             
             UE_LOG(LogTemp, Log, TEXT("Character dealt %d damage to player character %s"), TotalDamage, *TargetPlayer->GetName());
         }
@@ -1438,7 +1449,104 @@ void ABloodreadBaseCharacter::ApplyKnockback(FVector KnockbackDirection, float F
     }
 
     UE_LOG(LogTemp, Error, TEXT("🚨 === KNOCKBACK DEBUG START === Target: %s"), *GetName());
-    UE_LOG(LogTemp, Error, TEXT("🚨 Knockback: Original direction: %s, Force: %.2f"), *KnockbackDirection.ToString(), Force);
+    UE_LOG(LogTemp, Error, TEXT("🚨 Knockback: NetMode: %d, HasAuthority: %s"), 
+           (int32)GetNetMode(), HasAuthority() ? TEXT("TRUE") : TEXT("FALSE"));
+
+    // If this is a networked game and we're on a client, route through server
+    if (GetNetMode() != NM_Standalone && !HasAuthority())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Knockback: Client calling ServerApplyKnockback"));
+        ServerApplyKnockback(KnockbackDirection, Force);
+        return;
+    }
+
+    // If we have authority (server or standalone), apply knockback and replicate
+    if (HasAuthority())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Knockback: Server applying knockback and multicasting"));
+        // Apply locally first
+        ApplyKnockbackInternal(KnockbackDirection, Force);
+        
+        // Then replicate to all clients
+        if (GetNetMode() != NM_Standalone)
+        {
+            MulticastApplyKnockback(KnockbackDirection, Force);
+        }
+    }
+    else
+    {
+        // Standalone game, apply directly
+        UE_LOG(LogTemp, Warning, TEXT("Knockback: Standalone game, applying directly"));
+        ApplyKnockbackInternal(KnockbackDirection, Force);
+    }
+}
+
+void ABloodreadBaseCharacter::ServerApplyKnockback_Implementation(FVector KnockbackDirection, float Force)
+{
+    UE_LOG(LogTemp, Warning, TEXT("ServerApplyKnockback: Received knockback request from client"));
+    
+    // Apply knockback locally on server
+    ApplyKnockbackInternal(KnockbackDirection, Force);
+    
+    // Replicate to all clients
+    MulticastApplyKnockback(KnockbackDirection, Force);
+}
+
+void ABloodreadBaseCharacter::MulticastApplyKnockback_Implementation(FVector KnockbackDirection, float Force)
+{
+    UE_LOG(LogTemp, Warning, TEXT("MulticastApplyKnockback: Applying knockback on client"));
+    
+    // Don't apply on server again (it already applied in ServerApplyKnockback)
+    if (!HasAuthority())
+    {
+        ApplyKnockbackInternal(KnockbackDirection, Force);
+    }
+}
+
+void ABloodreadBaseCharacter::ServerApplyKnockbackToTarget_Implementation(ACharacter* TargetCharacter, FVector KnockbackDirection, float Force)
+{
+    UE_LOG(LogTemp, Warning, TEXT("ServerApplyKnockbackToTarget: Applying knockback to %s from %s"), 
+           TargetCharacter ? *TargetCharacter->GetName() : TEXT("NULL"), *GetName());
+    
+    if (!TargetCharacter)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ServerApplyKnockbackToTarget: NULL target"));
+        return;
+    }
+    
+    // Handle different character types
+    if (ABloodreadBaseCharacter* BaseCharacter = Cast<ABloodreadBaseCharacter>(TargetCharacter))
+    {
+        if (!BaseCharacter->GetIsAlive())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("ServerApplyKnockbackToTarget: BaseCharacter is dead"));
+            return;
+        }
+        
+        // Apply knockback to BloodreadBaseCharacter
+        BaseCharacter->ApplyKnockbackInternal(KnockbackDirection, Force);
+        BaseCharacter->MulticastApplyKnockback(KnockbackDirection, Force);
+    }
+    else if (ABloodreadPlayerCharacter* PlayerCharacter = Cast<ABloodreadPlayerCharacter>(TargetCharacter))
+    {
+        if (!PlayerCharacter->IsAlive())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("ServerApplyKnockbackToTarget: PlayerCharacter is dead"));
+            return;
+        }
+        
+        // Apply knockback to BloodreadPlayerCharacter (no multicast needed, it handles its own replication)
+        PlayerCharacter->ApplyKnockback(KnockbackDirection, Force);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ServerApplyKnockbackToTarget: Unknown character type: %s"), *TargetCharacter->GetClass()->GetName());
+    }
+}
+
+void ABloodreadBaseCharacter::ApplyKnockbackInternal(FVector KnockbackDirection, float Force)
+{
+    UE_LOG(LogTemp, Error, TEXT("🚨 ApplyKnockbackInternal: Original direction: %s, Force: %.2f"), *KnockbackDirection.ToString(), Force);
     UE_LOG(LogTemp, Error, TEXT("🚨 Character Controller: %s, Class: %s"), 
            GetController() ? *GetController()->GetName() : TEXT("NONE"), 
            *GetClass()->GetName());

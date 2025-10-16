@@ -26,6 +26,7 @@ class ABloodreadMageCharacter;
 class ABloodreadRogueCharacter;
 class ABloodreadHealerCharacter;
 class ABloodreadDragonCharacter;
+class ABloodreadPlayerCharacter;
 
 // Structure for any targetable entity (players or dummies)
 USTRUCT(BlueprintType)
@@ -583,6 +584,16 @@ public:
     // Server-side knockback initiation (called from attacking player)
     UFUNCTION(Server, Reliable, Category = "Combat")
     void ServerApplyKnockback(FVector KnockbackDirection, float Force);
+
+    // Server RPC to apply knockback to another player (called by attacker)
+    UFUNCTION(Server, Reliable, Category = "Combat")
+    void ServerApplyKnockbackToTarget(ACharacter* TargetCharacter, FVector KnockbackDirection, float Force);
+
+private:
+    // Internal knockback implementation (does the actual physics work)
+    void ApplyKnockbackInternal(FVector KnockbackDirection, float Force);
+
+public:
 
     // Combat damage system (virtual so subclasses can override)
     UFUNCTION(BlueprintCallable, Category = "Combat")

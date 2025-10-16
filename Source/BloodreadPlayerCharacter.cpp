@@ -1,5 +1,6 @@
 #include "BloodreadPlayerCharacter.h"
 #include "BloodreadGameMode.h"
+#include "BloodreadBaseCharacter.h"
 #include "Engine/World.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -182,7 +183,21 @@ void ABloodreadPlayerCharacter::UseAbility1()
                         if (PlayerLoadout.Ability1.KnockbackForce > 0.0f)
                         {
                             FVector KnockbackDirection = (PlayerTarget->GetActorLocation() - GetActorLocation()).GetSafeNormal();
-                            PlayerTarget->ApplyKnockback(KnockbackDirection, PlayerLoadout.Ability1.KnockbackForce);
+                            
+                            // Use networked knockback routing
+                            if (IsValid(PlayerTarget))
+                            {
+                                if (GetWorld()->GetNetMode() == NM_Standalone)
+                                {
+                                    // Single player - apply directly
+                                    PlayerTarget->ApplyKnockback(KnockbackDirection, PlayerLoadout.Ability1.KnockbackForce);
+                                }
+                                else
+                                {
+                                    // Multiplayer - route through our owned RPC
+                                    ServerApplyKnockbackToTarget(PlayerTarget, KnockbackDirection, PlayerLoadout.Ability1.KnockbackForce);
+                                }
+                            }
                         }
                     }
                 }
@@ -242,7 +257,21 @@ void ABloodreadPlayerCharacter::UseAbility2()
                         if (PlayerLoadout.Ability2.KnockbackForce > 0.0f)
                         {
                             FVector KnockbackDirection = (PlayerTarget->GetActorLocation() - GetActorLocation()).GetSafeNormal();
-                            PlayerTarget->ApplyKnockback(KnockbackDirection, PlayerLoadout.Ability2.KnockbackForce);
+                            
+                            // Use networked knockback routing
+                            if (IsValid(PlayerTarget))
+                            {
+                                if (GetWorld()->GetNetMode() == NM_Standalone)
+                                {
+                                    // Single player - apply directly
+                                    PlayerTarget->ApplyKnockback(KnockbackDirection, PlayerLoadout.Ability2.KnockbackForce);
+                                }
+                                else
+                                {
+                                    // Multiplayer - route through our owned RPC
+                                    ServerApplyKnockbackToTarget(PlayerTarget, KnockbackDirection, PlayerLoadout.Ability2.KnockbackForce);
+                                }
+                            }
                         }
                     }
                 }
@@ -334,6 +363,46 @@ void ABloodreadPlayerCharacter::ApplyKnockback(FVector KnockbackDirection, float
     
     OnKnockbackApplied(KnockbackDirection, Force);
     UE_LOG(LogTemp, Log, TEXT("Knockback applied with force: %.2f"), Force);
+}
+
+void ABloodreadPlayerCharacter::ServerApplyKnockbackToTarget_Implementation(ACharacter* TargetCharacter, FVector KnockbackDirection, float Force)
+{
+    UE_LOG(LogTemp, Warning, TEXT("PlayerChar ServerApplyKnockbackToTarget: Applying knockback to %s from %s"), 
+           TargetCharacter ? *TargetCharacter->GetName() : TEXT("NULL"), *GetName());
+    
+    if (!TargetCharacter)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PlayerChar ServerApplyKnockbackToTarget: NULL target"));
+        return;
+    }
+    
+    // Handle different character types
+    if (ABloodreadBaseCharacter* BaseCharacter = Cast<ABloodreadBaseCharacter>(TargetCharacter))
+    {
+        if (!BaseCharacter->GetIsAlive())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PlayerChar ServerApplyKnockbackToTarget: BaseCharacter is dead"));
+            return;
+        }
+        
+        // Apply knockback to BloodreadBaseCharacter
+        BaseCharacter->ApplyKnockback(KnockbackDirection, Force);
+    }
+    else if (ABloodreadPlayerCharacter* PlayerCharacter = Cast<ABloodreadPlayerCharacter>(TargetCharacter))
+    {
+        if (!PlayerCharacter->IsAlive())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PlayerChar ServerApplyKnockbackToTarget: PlayerCharacter is dead"));
+            return;
+        }
+        
+        // Apply knockback to BloodreadPlayerCharacter
+        PlayerCharacter->ApplyKnockback(KnockbackDirection, Force);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("PlayerChar ServerApplyKnockbackToTarget: Unknown character type: %s"), *TargetCharacter->GetClass()->GetName());
+    }
 }
 
 void ABloodreadPlayerCharacter::Heal(int32 Amount)
