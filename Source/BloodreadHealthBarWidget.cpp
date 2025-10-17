@@ -25,7 +25,13 @@ void UBloodreadHealthBarWidget::NativeConstruct()
 {
     Super::NativeConstruct();
     
-    UE_LOG(LogTemp, Warning, TEXT("=== BloodreadHealthBarWidget::NativeConstruct START ==="));
+    UWorld* World = GetWorld();
+    bool bIsServer = World ? World->GetNetMode() == NM_DedicatedServer || World->GetNetMode() == NM_ListenServer : false;
+    bool bIsClient = World ? World->GetNetMode() == NM_Client : false;
+    
+    UE_LOG(LogTemp, Warning, TEXT("=== BloodreadHealthBarWidget::NativeConstruct START - Server: %s, Client: %s ==="),
+           bIsServer ? TEXT("YES") : TEXT("NO"), 
+           bIsClient ? TEXT("YES") : TEXT("NO"));
     
     // Count bound widgets
     int32 BoundWidgetCount = 0;
@@ -116,6 +122,18 @@ void UBloodreadHealthBarWidget::NativeConstruct()
         UE_LOG(LogTemp, Error, TEXT("- Text Block named 'CharacterClassText'"));
     }
     
+    // Only initialize UI on client side (even for listen server host)
+    // Reuse existing World variable from above
+    bool bIsListenServer = World && World->GetNetMode() == NM_ListenServer;
+    // Update bIsClient to include standalone mode
+    bIsClient = World && (World->GetNetMode() == NM_Client || World->GetNetMode() == NM_Standalone);
+    
+    if (!bIsClient && !bIsListenServer)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BloodreadHealthBarWidget: Skipping UI initialization on dedicated server"));
+        return;
+    }
+    
     // Try to automatically find the player character
     if (!PlayerCharacterRef)
     {
@@ -174,17 +192,56 @@ void UBloodreadHealthBarWidget::InitializeHealthBar(ABloodreadBaseCharacter* Cha
 
 void UBloodreadHealthBarWidget::UpdateHealthDisplay()
 {
+    // Log network mode details
+    UWorld* World = GetWorld();
+    bool bIsClient = World && (World->GetNetMode() == NM_Client || World->GetNetMode() == NM_Standalone);
+    bool bIsListenServer = World && World->GetNetMode() == NM_ListenServer;
+    bool bIsDedicatedServer = World && World->GetNetMode() == NM_DedicatedServer;
+    
+    UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay called - Client: %s, ListenServer: %s, DedicatedServer: %s"), 
+           bIsClient ? TEXT("YES") : TEXT("NO"), 
+           bIsListenServer ? TEXT("YES") : TEXT("NO"), 
+           bIsDedicatedServer ? TEXT("YES") : TEXT("NO"));
+
+    // Don't update UI on dedicated server only - listen server needs UI for host player
+    if (bIsDedicatedServer)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Skipping UI updates on dedicated server"));
+        return;
+    }
+
     // Try to find a valid character reference if we don't have one
     if (!PlayerCharacterRef)
     {
+        UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: No PlayerCharacterRef, trying to find one..."));
+        
         // First try to get the character from the PlayerController
-        if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+        if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
         {
-            if (ABloodreadBaseCharacter* Character = Cast<ABloodreadBaseCharacter>(PC->GetPawn()))
+            UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Found PlayerController: %s"), *PC->GetName());
+            
+            if (APawn* Pawn = PC->GetPawn())
             {
-                PlayerCharacterRef = Character;
-                UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Found character via PlayerController: %s"), *Character->GetName());
+                UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: PlayerController has pawn: %s"), *Pawn->GetName());
+                
+                if (ABloodreadBaseCharacter* Character = Cast<ABloodreadBaseCharacter>(Pawn))
+                {
+                    PlayerCharacterRef = Character;
+                    UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Found character via PlayerController: %s"), *Character->GetName());
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Pawn is not a BloodreadBaseCharacter"));
+                }
             }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: PlayerController has no pawn"));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: No PlayerController found"));
         }
         
         // If we still don't have a character, try TargetCharacter
@@ -193,12 +250,20 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
             PlayerCharacterRef = TargetCharacter;
             UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Using TargetCharacter: %s"), *TargetCharacter->GetName());
         }
+        else if (!PlayerCharacterRef)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: TargetCharacter is also null"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Using existing PlayerCharacterRef: %s"), *PlayerCharacterRef->GetName());
     }
     
     if (!PlayerCharacterRef)
     {
         // No character reference - show default/empty state
-        UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: No character reference available"));
+        UE_LOG(LogTemp, Error, TEXT("UpdateHealthDisplay: No character reference available - showing default state"));
         
         if (HealthProgressBar)
         {
@@ -240,10 +305,14 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
     
     float HealthPercent = PlayerCharacterRef->GetHealthPercent();
     
+    UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Character %s has health percent: %f"), 
+           *PlayerCharacterRef->GetName(), HealthPercent);
+    
     // Update health progress bar
     if (HealthProgressBar)
     {
         HealthProgressBar->SetPercent(HealthPercent);
+        UE_LOG(LogTemp, Warning, TEXT("UpdateHealthDisplay: Set HealthProgressBar to %f"), HealthPercent);
         
         // Update color based on health percentage
         FLinearColor BarColor;
@@ -261,6 +330,10 @@ void UBloodreadHealthBarWidget::UpdateHealthDisplay()
         }
         
         HealthProgressBar->SetFillColorAndOpacity(BarColor);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("UpdateHealthDisplay: HealthProgressBar is null!"));
     }
     
     // Update health text
@@ -354,19 +427,42 @@ void UBloodreadHealthBarWidget::SetUpdateFrequency(float NewUpdateFrequency)
 {
     UpdateFrequency = FMath::Max(0.1f, NewUpdateFrequency); // Minimum 0.1 seconds
     
-    if (GetWorld())
+    UWorld* World = GetWorld();
+    bool bIsClient = World && (World->GetNetMode() == NM_Client || World->GetNetMode() == NM_Standalone);
+    bool bIsListenServer = World && World->GetNetMode() == NM_ListenServer;
+    bool bIsDedicatedServer = World && World->GetNetMode() == NM_DedicatedServer;
+    
+    UE_LOG(LogTemp, Warning, TEXT("SetUpdateFrequency called with %f, Client: %s, ListenServer: %s, DedicatedServer: %s"), 
+           NewUpdateFrequency, bIsClient ? TEXT("YES") : TEXT("NO"), 
+           bIsListenServer ? TEXT("YES") : TEXT("NO"), 
+           bIsDedicatedServer ? TEXT("YES") : TEXT("NO"));
+    
+    // Don't set up UI update timers on dedicated server only
+    if (bIsDedicatedServer)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SetUpdateFrequency: Skipping timer setup on dedicated server (UI not needed)"));
+        return;
+    }
+    
+    if (World)
     {
         // Clear existing timer
-        GetWorld()->GetTimerManager().ClearTimer(UpdateTimerHandle);
+        World->GetTimerManager().ClearTimer(UpdateTimerHandle);
         
         // Set new timer
-        GetWorld()->GetTimerManager().SetTimer(
+        World->GetTimerManager().SetTimer(
             UpdateTimerHandle,
             this,
             &UBloodreadHealthBarWidget::UpdateHealthDisplay,
             1.0f / UpdateFrequency,
             true // Loop
         );
+        
+        UE_LOG(LogTemp, Warning, TEXT("SetUpdateFrequency: Timer set with frequency %f seconds"), 1.0f / UpdateFrequency);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("SetUpdateFrequency: No world available!"));
     }
 }
 
@@ -505,17 +601,15 @@ FString UBloodreadHealthBarWidget::GetAbility1Name() const
     }
     else if (PlayerCharacterRef)
     {
-        // BloodreadPlayerCharacter doesn't have GetAbility1Name(), return placeholder
-        return FString(TEXT("Ability 1"));
+        return PlayerCharacterRef->GetAbility1Name();
     }
     
     // Also try to find a BloodreadPlayerCharacter if we don't have a BaseCharacter reference
     if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
     {
-        if (ABloodreadPlayerCharacter* PlayerChar = Cast<ABloodreadPlayerCharacter>(PC->GetPawn()))
+        if (ABloodreadBaseCharacter* Character = Cast<ABloodreadBaseCharacter>(PC->GetPawn()))
         {
-            // BloodreadPlayerCharacter doesn't have ability name functions yet
-            return FString(TEXT("Ability 1"));
+            return Character->GetAbility1Name();
         }
     }
     
@@ -530,17 +624,15 @@ FString UBloodreadHealthBarWidget::GetAbility2Name() const
     }
     else if (PlayerCharacterRef)
     {
-        // BloodreadPlayerCharacter doesn't have GetAbility2Name(), return placeholder
-        return FString(TEXT("Ability 2"));
+        return PlayerCharacterRef->GetAbility2Name();
     }
     
     // Also try to find a BloodreadPlayerCharacter if we don't have a BaseCharacter reference
     if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
     {
-        if (ABloodreadPlayerCharacter* PlayerChar = Cast<ABloodreadPlayerCharacter>(PC->GetPawn()))
+        if (ABloodreadBaseCharacter* Character = Cast<ABloodreadBaseCharacter>(PC->GetPawn()))
         {
-            // BloodreadPlayerCharacter doesn't have ability name functions yet
-            return FString(TEXT("Ability 2"));
+            return Character->GetAbility2Name();
         }
     }
     
